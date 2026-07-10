@@ -188,55 +188,103 @@ button:disabled {
   padding: 0.6em;
 }
 
+/* T14, punto 3: indicador de "grabando" — antes era un bloque de texto entero
+   con fondo tenue, poco visible sobre video real. Ahora es un punto rojo
+   sólido y brillante (::before) que titila con la animación existente,
+   separado del texto para que este último siga legible mientras el punto
+   parpadea. El fondo oscuro semitransparente del bloque da contraste sobre
+   cualquier video de fondo. */
 #indicador-grabando {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
   position: absolute;
   top: 0.5em;
   right: 0.5em;
   color: #fff;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 0.25em 0.6em;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 0.3em 0.7em 0.3em 0.55em;
   border-radius: 12px;
   font-size: 0.85rem;
+}
+
+#indicador-grabando::before {
+  content: "";
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #ff0000;
+  box-shadow: 0 0 6px 1px rgba(255, 0, 0, 0.8);
   animation: parpadeo-grabando 1s infinite;
+  flex-shrink: 0;
 }
 
 @keyframes parpadeo-grabando {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50% { opacity: 0.25; }
 }
 
+/* T14, punto 2: modal obligatorio a pantalla completa para el resultado de la
+   grabación. Reemplaza la franja fija anterior (position:fixed bottom,
+   max-height:0 que crecía con :has()). Ahora es un overlay que cubre toda la
+   pantalla con fondo oscuro semi-opaco; arranca hidden (ver index.html) y
+   solo js/camara.js lo muestra/oculta — sin CSS de cierre por click-fuera. */
 #zona-resultado {
   position: fixed;
-  bottom: 0;
+  top: 0;
   left: 0;
   width: 100%;
-  max-height: 0;
-  overflow: hidden;
-  z-index: 10;
+  height: 100%;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1em;
+  padding: 1em;
+  padding-top: calc(1em + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(1em + env(safe-area-inset-bottom, 0px));
+}
+
+#zona-resultado[hidden] {
+  display: none;
 }
 
 #video-resultado {
   width: 100%;
-  max-height: 40vh;
+  max-width: 480px;
+  max-height: 65vh;
   display: block;
-}
-
-#video-resultado:not([hidden]),
-#enlace-descarga:not([hidden]) {
-  position: relative;
-}
-
-#zona-resultado:has(#video-resultado:not([hidden])) {
-  max-height: 45vh;
+  border-radius: 8px;
   background: #000;
 }
 
-#enlace-descarga {
-  display: block;
-  text-align: center;
-  color: #0ff;
-  background: rgba(0, 0, 0, 0.8);
-  padding: 0.5em;
+#zona-resultado-botones {
+  display: flex;
+  width: 100%;
+  max-width: 480px;
+  gap: 0.75em;
+}
+
+#zona-resultado-botones button {
+  flex: 1;
+  padding: 0.85em;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+}
+
+#btn-descargar-resultado {
+  background: #0ff;
+  color: #000;
+}
+
+#btn-descartar-resultado {
+  background: #333;
+  color: #fff;
 }
 
 #panel-editor {

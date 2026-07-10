@@ -623,7 +623,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 9 — Calibración de voz, modal de resultado, indicador de grabación (feedback de tercera prueba real)
 
-### ⬜ T14. Recalibrar velocidad por voz, modal obligatorio de video grabado, indicador de grabación visible
+### ✅ T14. Recalibrar velocidad por voz, modal obligatorio de video grabado, indicador de grabación visible
 
 - **Alcance**:
   - INCLUYE:
@@ -665,18 +665,48 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
     preview, selector de lente) salvo lo estrictamente necesario para el modal.
 - **Archivos**: `js/voz.js`, `index.html`, `css/estilos.css`, `js/camara.js`.
 - **Definición de Hecho**:
-  - [ ] Los umbrales de voz están notablemente más bajos (o el nivel RMS se amplifica) que antes,
+  - [x] Los umbrales de voz están notablemente más bajos (o el nivel RMS se amplifica) que antes,
     con el razonamiento documentado en un comentario — el enganche de velocidad debería ahora
     reaccionar a un rango típico de habla en vez de quedar pegado cerca de silencio.
-  - [ ] Al detener una grabación, aparece un modal a pantalla completa con el video y exactamente
+    `UMBRAL_ENTRAR_HABLA` 0.06→0.015, `UMBRAL_SALIR_HABLA` 0.03→0.008 (~10x más bajos),
+    `FACTOR_MINIMO_HABLANDO` 0.4→0.7. **Corrección adicional hecha en la verificación** (no estaba
+    en el reporte del constructor): la fórmula de `aplicarEngancheVelocidad()` multiplicaba `nivel`
+    (RMS crudo, realista en rango ~0.015-0.15) directamente contra `(MAX-MIN)` asumiendo que `nivel`
+    ya estaba en [0,1] — con valores tan chicos, casi toda la variación se perdía y el factor
+    quedaba pegado cerca de `FACTOR_MINIMO_HABLANDO` sin importar qué tan fuerte/rápido hablara el
+    usuario (este es probablemente el motivo real de "no sigue la velocidad al hablar"). Se agregó
+    `remapearNivelAFraccion()` que remapea `nivel` desde su rango realista
+    (`UMBRAL_ENTRAR_HABLA`..`NIVEL_HABLA_MAX_ESPERADO=0.15`) a una fracción 0-1 ANTES de aplicar la
+    fórmula, para que el rango completo de factor (0.7-1.8) sí se recorra con voz real.
+  - [x] Al detener una grabación, aparece un modal a pantalla completa con el video y exactamente
     dos botones ("Descargar" y "Descartar y grabar de nuevo"); no hay ninguna otra forma de
-    cerrarlo (ni click afuera, ni Escape, ni X).
-  - [ ] Elegir "Descargar" dispara la descarga del archivo real.
-  - [ ] Elegir "Descartar y grabar de nuevo" (o "Cerrar" tras descargar, según cómo se implementó
+    cerrarlo (ni click afuera, ni Escape, ni X). (`#zona-resultado` es `position:fixed`, cubre toda
+    la pantalla, `z-index:30`; sin listener de click en el backdrop ni de tecla Escape — confirmado
+    por lectura de camara.js, los únicos dos listeners que tocan el modal son los de los botones.)
+  - [x] Elegir "Descargar" dispara la descarga del archivo real. (Click programático de
+    `enlaceDescarga` que ya trae `href`/`download` listos desde el evento `stop` del MediaRecorder.)
+  - [x] Elegir "Descartar y grabar de nuevo" (o "Cerrar" tras descargar, según cómo se implementó
     el punto 2) cierra el modal y dejar la app lista para grabar otra vez sin recargar la página.
-  - [ ] El indicador de "grabando" es un punto rojo sólido, visible con claridad sobre cualquier
-    fondo de video, con la animación de parpadeo.
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+    (Ambos botones llaman `ocultarModalResultado()`; "Descargar" cierra inmediato tras el click
+    programático — decisión documentada en un comentario, razonable y simple; "Descartar" además
+    llama `limpiarResultado()` que revoca la URL del blob y limpia el `<video>`. `grabando=false` ya
+    se seteó antes en el mismo handler de `stop`, así que "Grabar" vuelve a estar disponible sin
+    recargar.)
+  - [x] El indicador de "grabando" es un punto rojo sólido, visible con claridad sobre cualquier
+    fondo de video, con la animación de parpadeo. (`#indicador-grabando::before`: 13px, círculo rojo
+    `#ff0000` con `box-shadow` de brillo, animación de parpadeo aplicada solo al punto — el texto
+    "Grabando" queda legible y estático; fondo `rgba(0,0,0,0.65)` detrás para contraste.)
+- **Evidencia del verificador**: Revisión de código línea por línea de los 4 archivos tocados
+  (voz.js, index.html, css/estilos.css, camara.js). Encontrado y corregido un bug adicional en la
+  fórmula de mapeo nivel→factor (ver arriba) que el constructor no detectó — sin este fix, el punto
+  1 de la DoD no se habría cumplido realmente pese a bajar los umbrales. Sintaxis validada
+  (`node --check` en voz.js tras la corrección, y en camara.js, sin errores). Ids de HTML/JS del
+  modal confirmados 1:1 por grep. Assets sirven 200 en el servidor de :8080. **Nota importante**:
+  mismo límite de toda la sesión — sin micrófono real, la calibración de voz sigue siendo una
+  estimación (ahora la segunda ronda, más la corrección de mapeo) sin poder confirmarse en vivo; el
+  modal y el indicador rojo son cambios de UI/CSS de bajo riesgo y alta confianza incluso sin
+  prueba visual. El usuario debe confirmar los 3 puntos en su iPhone, en particular si la voz por
+  fin sigue el ritmo real al hablar.
 
 ---
 

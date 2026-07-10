@@ -25,6 +25,9 @@ const btnGrabar = document.getElementById("btn-grabar");
 const indicadorGrabando = document.getElementById("indicador-grabando");
 const videoResultado = document.getElementById("video-resultado");
 const enlaceDescarga = document.getElementById("enlace-descarga");
+const zonaResultado = document.getElementById("zona-resultado");
+const btnDescargarResultado = document.getElementById("btn-descargar-resultado");
+const btnDescartarResultado = document.getElementById("btn-descartar-resultado");
 const btnAlternarConfig = document.getElementById("btn-alternar-config");
 // T12: todos los controles secundarios (agrupados en #panel-config) arrancan
 // disabled en el HTML y se habilitan aquí, una vez que getUserMedia resuelve.
@@ -271,13 +274,11 @@ function iniciarGrabacion() {
 
     if (videoResultado) {
       videoResultado.src = url;
-      videoResultado.hidden = false;
     }
     if (enlaceDescarga) {
       enlaceDescarga.href = url;
       const extension = tipoBlob.includes("mp4") ? "mp4" : "webm";
       enlaceDescarga.download = `grabacion.${extension}`;
-      enlaceDescarga.hidden = false;
     }
 
     grabando = false;
@@ -286,6 +287,12 @@ function iniciarGrabacion() {
 
     // T12, punto 5: al detener la grabación se pausa el scroll del teleprompter.
     pausarScroll();
+
+    // T14, punto 2: en vez de solo mostrar el video en una franja fija, se
+    // abre el modal obligatorio a pantalla completa (#zona-resultado). El
+    // usuario debe elegir "Descargar" o "Descartar y grabar de nuevo" — no
+    // hay otra forma de cerrarlo.
+    mostrarModalResultado();
   });
 
   mediaRecorder.addEventListener("error", (evento) => {
@@ -303,6 +310,66 @@ function iniciarGrabacion() {
   // T12, punto 5: grabar controla el teleprompter — arranca el scroll junto
   // con la grabación.
   iniciarScroll();
+}
+
+// T14, punto 2: modal obligatorio de resultado. mostrarModalResultado() lo
+// abre al detener la grabación; los dos botones son la única forma de
+// cerrarlo (sin click-fuera ni Escape, a propósito).
+function mostrarModalResultado() {
+  if (zonaResultado) {
+    zonaResultado.hidden = false;
+  }
+}
+
+function ocultarModalResultado() {
+  if (zonaResultado) {
+    zonaResultado.hidden = true;
+  }
+}
+
+function limpiarResultado() {
+  if (videoResultado) {
+    videoResultado.pause();
+    videoResultado.removeAttribute("src");
+    videoResultado.load();
+  }
+  if (urlObjetoAnterior) {
+    URL.revokeObjectURL(urlObjetoAnterior);
+    urlObjetoAnterior = null;
+  }
+  if (enlaceDescarga) {
+    enlaceDescarga.href = "";
+  }
+}
+
+// T14, punto 2: "Descargar" dispara la descarga real (click programático del
+// <a> de descarga, que ya trae href/download listos desde el evento "stop")
+// y CIERRA el modal de inmediato tras disparar la descarga — se eligió la
+// opción más simple (en vez de dejar un tercer estado de confirmación con un
+// botón "Cerrar"), porque el navegador ya da su propia señal de que la
+// descarga arrancó (aviso nativo / aparición en la lista de descargas) y así
+// se mantiene la regla de "exactamente dos botones para cerrar". No se limpia
+// el blob al descargar (solo al descartar), por si el usuario quiere volver a
+// grabar y descargar de nuevo no aplica aquí porque el modal ya se cerró y
+// una nueva grabación reemplazará el resultado en el siguiente "stop".
+if (btnDescargarResultado) {
+  btnDescargarResultado.addEventListener("click", () => {
+    if (enlaceDescarga && enlaceDescarga.href) {
+      enlaceDescarga.click();
+    }
+    ocultarModalResultado();
+  });
+} else {
+  console.error("No se encontró el botón #btn-descargar-resultado");
+}
+
+if (btnDescartarResultado) {
+  btnDescartarResultado.addEventListener("click", () => {
+    limpiarResultado();
+    ocultarModalResultado();
+  });
+} else {
+  console.error("No se encontró el botón #btn-descartar-resultado");
 }
 
 function detenerGrabacion() {

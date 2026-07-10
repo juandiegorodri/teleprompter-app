@@ -98,9 +98,19 @@
     <button id="btn-cerrar-ajustes" type="button">Cerrar ajustes</button>
   </div>
 
-  <div id="zona-resultado">
-    <video id="video-resultado" controls hidden></video>
-    <a id="enlace-descarga" download="grabacion.webm" hidden>Descargar video</a>
+  <!-- T14, punto 2: modal obligatorio a pantalla completa. Arranca hidden;
+       solo se muestra al detener una grabación (js/camara.js). No tiene
+       forma de cerrarse aparte de los dos botones — sin click-fuera, sin
+       Escape, sin X. #enlace-descarga se mantiene como mecanismo real detrás
+       de "Descargar" (click programático desde camara.js), oculto del layout
+       visual (el botón es el que se ve). -->
+  <div id="zona-resultado" hidden>
+    <video id="video-resultado" controls></video>
+    <div id="zona-resultado-botones">
+      <button id="btn-descargar-resultado" type="button">Descargar</button>
+      <button id="btn-descartar-resultado" type="button">Descartar y grabar de nuevo</button>
+    </div>
+    <a id="enlace-descarga" download="grabacion.webm" hidden></a>
   </div>
 
   <script type="module" src="js/camara.js"></script>
