@@ -527,6 +527,72 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 
 ---
 
+## Fase 8 — Rediseño (texto sobre cámara, preview en vivo, velocidad y lente configurables)
+
+*Pedida por el usuario tras dos rondas de prueba real en iPhone. Cubre lo que en T12 se dejó
+anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirmó que la quiere ya.*
+
+### ⬜ T13. Texto superpuesto arriba de la cámara + panel de ajustes con preview en vivo + velocidad y lente configurables
+
+- **Alcance**:
+  - INCLUYE:
+    1. **Texto superpuesto en la parte superior de la cámara**: en vez del layout actual de zonas
+       apiladas (`#zona-camara` arriba, `#zona-texto` debajo), el bloque de texto del teleprompter
+       pasa a superponerse sobre la franja superior de `#zona-camara` (donde está el lente frontal
+       del iPhone), con `position: absolute`/`z-index` sobre el `<video>`. Debe seguir siendo
+       legible (usa el fondo translúcido/opaco y color ya configurables de T9) y no debe tapar
+       controles. `#zona-camara` pasa a ocupar prácticamente toda la pantalla disponible (menos
+       controles); el control de "proporción cámara/texto" de T10 pasa a significar, en este nuevo
+       layout, qué tan alto es el bloque de texto superpuesto (no un reparto de dos zonas separadas
+       — ajusta `js/ajustes.js` y su lectura de `--tp-proporcion-camara` para la nueva semántica,
+       documentando el cambio).
+    2. **Preview en vivo en el panel de ajustes**: agrega un contenedor de demostración (texto de
+       muestra corto) dentro de `#panel-ajustes` que se actualiza en tiempo real — tamaño de
+       fuente, color, opacidad de fondo Y velocidad de scroll — mientras el usuario mueve cada
+       slider, para que vea el efecto ANTES de cerrar el panel y sin necesitar grabar. El preview de
+       velocidad debe animarse (el texto de muestra se mueve a la velocidad configurada) para poder
+       calibrar qué tan rápido es legible.
+    3. **Velocidad configurable en ajustes**: agrega un `<input type="range">` de "Velocidad del
+       teleprompter" en `#panel-ajustes`. Expón desde `js/teleprompter.js` una función tipo
+       `setVelocidadBase(pxPorSegundo)` que reemplace la constante fija `VELOCIDAD_BASE_PX_S`
+       por un valor variable en tiempo real; `js/ajustes.js` la llama al mover el slider y persiste
+       el valor en el mismo objeto de `localStorage` de T9/T10 (agrega la propiedad, ej.
+       `velocidadBase`). Rango sugerido: 12–45 px/s (el valor actual, 24, como default). Esto debe
+       seguir combinándose con el factor de voz de T8 (velocidad efectiva = velocidad base ×
+       factor de voz), no reemplazarlo.
+    4. **Selector de cámara/lente**: agrega un control (ej. `<select>` o botón toggle) en
+       `#panel-ajustes` para elegir frontal/trasera (`facingMode: "user"` vs `"environment"`).
+       Al cambiar, debe volver a pedir `getUserMedia` con el nuevo `facingMode` y reemplazar el
+       stream activo (parar las pistas del stream anterior con `.stop()` antes de pedir el nuevo,
+       para no dejar la cámara vieja encendida). Si el dispositivo no tiene cámara trasera o el
+       cambio falla, mostrar un mensaje legible y mantener la cámara anterior activa. Debe
+       persistir la preferencia en `localStorage` (mismo objeto de ajustes) y aplicarla la próxima
+       vez que se active la cámara.
+  - NO INCLUYE: elegir resolución/bitrate de grabación, múltiples perfiles de ajustes guardados,
+    ni rediseño visual más allá de lo descrito (paleta, iconografía, etc. quedan fuera).
+- **Archivos**: `index.html`, `css/estilos.css`, `js/teleprompter.js`, `js/ajustes.js`,
+  `js/camara.js`.
+- **Definición de Hecho**:
+  - [ ] El texto del teleprompter se ve superpuesto sobre la parte superior de la imagen de cámara
+    (no en una franja separada debajo), legible con el fondo/color configurados, sin tapar los
+    botones de `#zona-controles` ni el panel de configuración.
+  - [ ] En el panel de ajustes, mover cada slider (tamaño, color, opacidad, velocidad) actualiza un
+    texto de muestra visible dentro del propio panel en tiempo real, incluida una animación de
+    scroll a la velocidad configurada — sin tener que cerrar el panel ni grabar para verlo.
+  - [ ] Cambiar el slider de velocidad cambia la velocidad real del teleprompter la próxima vez que
+    se grabe (o inmediatamente si ya está corriendo), y esa velocidad persiste tras recargar.
+  - [ ] La velocidad configurada por el usuario sigue combinándose correctamente con el control por
+    voz de T8 (hablar más rápido/lento sigue acelerando/desacelerando proporcionalmente sobre la
+    nueva base, no la reemplaza).
+  - [ ] El selector de cámara permite cambiar entre frontal y trasera, la vista previa cambia al
+    lente correcto, no quedan streams de cámara huérfanos encendidos, y la preferencia persiste
+    tras recargar.
+  - [ ] Ningún cambio de esta tarea rompe el flujo de T12 (cámara habilita todo, grabar controla el
+    scroll, voz activa por defecto).
+- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+
+---
+
 ## Bugs
 
 *Lo que el verificador o cualquiera encuentre fuera del alcance de la tarea en curso.
@@ -538,15 +604,8 @@ Nada se arregla "de pasada": se anota aquí y se prioriza.*
 
 ## Ideas / futuro (fuera de v1)
 
-- **Fase de diseño post-v1 (pedida explícitamente por el usuario tras probar en iPhone real)**:
-  - Superponer el texto del teleprompter sobre la visual de cámara (en vez de zonas apiladas),
-    explorando si Safari iOS lo permite bien; texto lo más cerca posible del lente de la cámara.
-  - Selector de cámara/lente (frontal/trasera) — relacionado con la idea ya existente de "cámara
-    trasera / alternar frontal-trasera" más abajo.
-  - En el panel de ajustes de tipografía (T9): una ventana de preview en vivo que muestre un texto
-    de muestra actualizándose en tiempo real mientras el usuario mueve los sliders de tamaño/color.
-  - Agregar al panel de ajustes un control de "velocidad por defecto" del teleprompter (además del
-    rango mínimo/máximo que ya escala con la voz).
+- ~~Superponer texto sobre cámara, selector de lente, preview en vivo, velocidad configurable~~ —
+  movido a T13 (Fase 8), el usuario confirmó que lo quiere ya, ya no es "futuro".
 - Service worker para funcionamiento offline y cacheo de la app (la PWA de v1 solo cubre "agregar a
   pantalla de inicio", no offline).
 - Múltiples guiones guardados, con títulos y selección (v1 persiste uno solo).
