@@ -621,6 +621,65 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ---
 
+## Fase 9 — Calibración de voz, modal de resultado, indicador de grabación (feedback de tercera prueba real)
+
+### ⬜ T14. Recalibrar velocidad por voz, modal obligatorio de video grabado, indicador de grabación visible
+
+- **Alcance**:
+  - INCLUYE:
+    1. **Recalibrar la detección de voz → velocidad**: el usuario reportó que el avance "está muy
+       lento y no sigue la velocidad al hablar" — síntoma consistente con que los umbrales de
+       histéresis (`UMBRAL_ENTRAR_HABLA=0.06`/`UMBRAL_SALIR_HABLA=0.03` en voz.js) están calibrados
+       más altos de lo que un micrófono típico de iPhone produce en RMS normal, así que el estado
+       casi nunca pasa a "hablando" y el factor de velocidad queda pegado cerca de 0 sin importar
+       cómo hable el usuario. Bajar significativamente ambos umbrales (ej. a un orden de magnitud
+       menor, o agregar una ganancia/amplificación al nivel RMS calculado antes de compararlo con
+       los umbrales) para que el habla normal cruce el umbral de forma confiable. Subir también el
+       piso del rango de factor (`FACTOR_MINIMO_HABLANDO`) y/o la velocidad base por defecto para
+       que el avance al hablar sea claramente perceptible (no solo "un poco más que silencio").
+       Documentar los nuevos valores con un comentario explicando el razonamiento (esta sigue
+       siendo una calibración a ciegas sin micrófono real disponible para probar — dejar claro que
+       puede necesitar un ajuste más tras esta ronda).
+    2. **Modal obligatorio para el video grabado**: al detener la grabación, el video ya NO aparece
+       en una franja fija en la parte inferior sin forma de cerrarla. En su lugar, se abre un modal
+       a pantalla completa (overlay oscuro sobre toda la app) que:
+       - Muestra el `<video controls>` con la grabación.
+       - Tiene exactamente dos botones debajo del video: **"Descargar"** (dispara la descarga real
+         del archivo, igual que el enlace de descarga actual) y **"Descartar y grabar de nuevo"**
+         (limpia el resultado, no descarga nada).
+       - El modal NO se puede cerrar de ninguna otra forma (sin click en backdrop, sin botón X,
+         sin tecla Escape) — el usuario está obligado a elegir una de las dos opciones, así nunca
+         cierra por accidente sin haber guardado lo que grabó.
+       - Cualquiera de las dos opciones cierra el modal y deja la app lista para grabar de nuevo
+         (cámara sigue activa, botón "Grabar" disponible, sin necesidad de recargar la página).
+       - "Descargar" puede cerrar el modal inmediatamente después de disparar la descarga, o dejar
+         el modal abierto con un mensaje de confirmación y un tercer estado "Cerrar" — decide la
+         opción más simple y consistente con "elegir una de las dos para cerrar"; documenta cuál.
+    3. **Indicador de "grabando" más visible**: el indicator actual (`#indicador-grabando`) es muy
+       tenue sobre el video. Cámbialo a un punto rojo sólido y brillante con la animación de
+       parpadeo ya existente, con suficiente contraste (fondo oscuro semitransparente detrás si
+       hace falta) para que se note claramente sobre cualquier video de fondo — el patrón visual
+       estándar de "grabando" (círculo rojo que titila).
+  - NO INCLUYE: cambiar el mecanismo de detección de voz (Web Audio API / RMS, sigue siendo el
+    ADR vigente), ni agregar reconocimiento de palabras, ni tocar nada de T13 (superposición,
+    preview, selector de lente) salvo lo estrictamente necesario para el modal.
+- **Archivos**: `js/voz.js`, `index.html`, `css/estilos.css`, `js/camara.js`.
+- **Definición de Hecho**:
+  - [ ] Los umbrales de voz están notablemente más bajos (o el nivel RMS se amplifica) que antes,
+    con el razonamiento documentado en un comentario — el enganche de velocidad debería ahora
+    reaccionar a un rango típico de habla en vez de quedar pegado cerca de silencio.
+  - [ ] Al detener una grabación, aparece un modal a pantalla completa con el video y exactamente
+    dos botones ("Descargar" y "Descartar y grabar de nuevo"); no hay ninguna otra forma de
+    cerrarlo (ni click afuera, ni Escape, ni X).
+  - [ ] Elegir "Descargar" dispara la descarga del archivo real.
+  - [ ] Elegir "Descartar y grabar de nuevo" (o "Cerrar" tras descargar, según cómo se implementó
+    el punto 2) cierra el modal y dejar la app lista para grabar otra vez sin recargar la página.
+  - [ ] El indicador de "grabando" es un punto rojo sólido, visible con claridad sobre cualquier
+    fondo de video, con la animación de parpadeo.
+- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+
+---
+
 ## Bugs
 
 *Lo que el verificador o cualquiera encuentre fuera del alcance de la tarea en curso.
