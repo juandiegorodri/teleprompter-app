@@ -12,6 +12,12 @@ html, body {
   background: #000;
 }
 
+:root {
+  --tp-font-size: 1.15rem;
+  --tp-color-texto: #ffffff;
+  --tp-opacidad-fondo: 0.55;
+}
+
 #zona-camara {
   position: absolute;
   top: 0;
@@ -60,14 +66,14 @@ html, body {
   height: 100%;
   overflow: hidden;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, var(--tp-opacidad-fondo));
 }
 
 #teleprompter-texto {
   width: 100%;
   padding: 0.75em 1em;
-  color: #fff;
-  font-size: 1.15rem;
+  color: var(--tp-color-texto);
+  font-size: var(--tp-font-size);
   line-height: 1.5;
   font-weight: 500;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
@@ -233,4 +239,44 @@ html, body {
 #indicador-estado-voz.hablando {
   color: #0ff;
   font-weight: bold;
+}
+
+/* T9: panel de ajustes de tipografía y fondo del texto */
+#panel-ajustes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 20;
+  background: #111;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  padding: 1em;
+  gap: 1em;
+  overflow-y: auto;
+}
+
+#panel-ajustes[hidden] {
+  display: none;
+}
+
+.campo-ajuste {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+}
+
+.campo-ajuste label {
+  font-size: 0.9rem;
+}
+
+.campo-ajuste input[type="range"],
+.campo-ajuste input[type="color"] {
+  width: 100%;
+}
+
+#btn-cerrar-ajustes {
+  padding: 0.75em;
 }

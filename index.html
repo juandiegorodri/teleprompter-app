@@ -27,6 +27,7 @@
     <button id="btn-alternar-editor" type="button">Editar guion</button>
     <button id="btn-activar-voz" type="button">Activar detección de voz</button>
     <button id="btn-modo-voz" type="button" aria-pressed="false">Modo voz: OFF</button>
+    <button id="btn-alternar-ajustes" type="button">Ajustes</button>
   </div>
 
   <div id="zona-voz">
@@ -44,6 +45,22 @@
       <button id="btn-cerrar-editor" type="button">Ver teleprompter</button>
     </div>
   </div>
+  <div id="panel-ajustes" hidden>
+    <div class="campo-ajuste">
+      <label for="input-tamano-fuente">Tamaño de fuente</label>
+      <input id="input-tamano-fuente" type="range" min="0.8" max="3" step="0.05">
+    </div>
+    <div class="campo-ajuste">
+      <label for="input-color-texto">Color del texto</label>
+      <input id="input-color-texto" type="color">
+    </div>
+    <div class="campo-ajuste">
+      <label for="input-opacidad-fondo">Opacidad del fondo</label>
+      <input id="input-opacidad-fondo" type="range" min="0" max="1" step="0.05">
+    </div>
+    <button id="btn-cerrar-ajustes" type="button">Cerrar ajustes</button>
+  </div>
+
   <div id="zona-resultado">
     <video id="video-resultado" controls hidden></video>
     <a id="enlace-descarga" download="grabacion.webm" hidden>Descargar video</a>

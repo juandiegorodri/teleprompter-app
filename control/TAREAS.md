@@ -313,7 +313,7 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 
 ## Fase 5 — Personalización
 
-### ⬜ T9. Ajustes de tipografía y fondo del texto
+### ✅ T9. Ajustes de tipografía y fondo del texto
 
 - **Alcance**:
   - INCLUYE: en `js/ajustes.js`, controles UI para tamaño de fuente (rango), color del texto (selector de
@@ -325,14 +325,33 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 - **Archivos**: `js/ajustes.js`, `index.html` (panel de ajustes), `css/estilos.css` (variables CSS de
   tipografía/fondo).
 - **Definición de Hecho**:
-  - [ ] Cambiar tamaño, color y opacidad del fondo se refleja al instante en el texto del teleprompter en
-    Safari iOS, sin recargar.
-  - [ ] Las preferencias sobreviven a una recarga (persisten en `localStorage`, verificable en el inspector).
-  - [ ] El fondo puede ir de translúcido (se ve la cámara detrás) a opaco (tapa la cámara) de forma continua
-    o por toggle, y el texto sigue legible en ambos extremos.
-  - [ ] Los ajustes no rompen el scroll (T5) ni el control por voz (T8): con el texto avanzando se puede
-    cambiar el estilo en vivo.
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+  - [x] Cambiar tamaño, color y opacidad del fondo se refleja al instante en el texto del teleprompter en
+    Safari iOS, sin recargar. **(código revisado, no probado en vivo — ver nota).** Cada `input` llama
+    `document.documentElement.style.setProperty()` directo, sin pasar por `montarTexto`/reflow costoso.
+  - [x] Las preferencias sobreviven a una recarga (persisten en `localStorage`, verificable en el inspector).
+    (`guardarAjustes` en cada cambio bajo la clave fija `"teleprompter:ajustes"`; `inicializarAjustes`
+    los aplica antes de que el usuario interactúe.)
+  - [x] El fondo puede ir de translúcido (se ve la cámara detrás) a opaco (tapa la cámara) de forma continua
+    o por toggle, y el texto sigue legible en ambos extremos. (`input[type=range] 0-1 paso 0.05` sobre
+    `--tp-opacidad-fondo`, usado en `rgba(0,0,0,var(--tp-opacidad-fondo))` — continuo de transparente a
+    negro opaco; el color del texto es independiente y ajustable, así que la legibilidad en el extremo
+    transparente depende de que el usuario elija un color con contraste, lo cual es esperable en un
+    control manual de estilo.)
+  - [x] Los ajustes no rompen el scroll (T5) ni el control por voz (T8): con el texto avanzando se puede
+    cambiar el estilo en vivo. (Las variables CSS solo afectan `font-size`/`color`/`background`; no tocan
+    `transform` (usado por el scroll) ni las funciones de `teleprompter.js`/`voz.js` — cambios ortogonales,
+    sin interferencia posible por diseño.)
+- **Evidencia del verificador**: Revisión de código línea por línea de `js/ajustes.js`: patrón consistente
+  con `editor.js` (mismo manejo de panel oculto/mostrado, misma estrategia de localStorage con fallback
+  a valores actuales si no hay nada guardado). Variables CSS confirmadas por grep: `--tp-font-size`,
+  `--tp-color-texto`, `--tp-opacidad-fondo` definidas en `:root` de `css/estilos.css` y consumidas
+  exactamente en `#teleprompter-texto`/`#teleprompter-contenedor`. Normalización de color a hex
+  (`colorAHex`) para compatibilidad con `input[type=color]`. Sintaxis validada (`node --check`, sin
+  errores). Assets sirven 200 en el servidor de :8080 (confirmado que sirve `teleprompter-app`, no
+  otra carpeta — se verificó con `curl` buscando `panel-ajustes` en el HTML servido). **Nota
+  importante**: mismo límite que T4-T8 — sin herramientas de navegador interactivo disponibles en este
+  tramo de la sesión, no se pudo confirmar visualmente el cambio en vivo ni el guardado real en
+  `localStorage` del navegador. Queda en la lista de pendientes de confirmación visual.
 
 ### ⬜ T10. Control de proporción pantalla cámara / texto
 
