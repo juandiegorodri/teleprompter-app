@@ -208,6 +208,17 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+/* Bug reportado por el usuario: el indicador se veía activo con solo activar
+   la cámara, sin estar grabando. Causa: el `display: flex` de arriba (un
+   selector de ID, alta especificidad) le ganaba al `display: none` del
+   navegador para `[hidden]` (regla de baja especificidad del user-agent
+   stylesheet) — así que `indicadorGrabando.hidden = true` en JS no ocultaba
+   nada. Mismo patrón de fix que ya usan #panel-config/#panel-editor/
+   #zona-resultado en este archivo. */
+#indicador-grabando[hidden] {
+  display: none;
+}
+
 #indicador-grabando::before {
   content: "";
   display: inline-block;

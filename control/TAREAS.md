@@ -710,6 +710,77 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ---
 
+## Fase 10 — Cuarta ronda de feedback real: velocidad máxima, grabación que se corta, indicador y calidad de cámara
+
+### ✅ T15a. Fix directo: indicador de "grabando" activo sin estar grabando
+
+- **Qué pasaba**: el usuario reportó que el punto rojo de "Grabando" aparecía titilando con solo
+  activar la cámara, sin haber tocado "Grabar".
+- **Causa encontrada**: `#indicador-grabando { display: flex; ... }` es un selector de ID (alta
+  especificidad CSS) que le ganaba al `[hidden] { display: none }` del user-agent stylesheet
+  (baja especificidad) — así que `indicadorGrabando.hidden = true/false` en `js/camara.js` nunca
+  ocultaba nada de verdad, el punto quedaba siempre visible y parpadeando desde que cargaba la app.
+- **Arreglado directo** (cambio de una línea, sin pasar por el enjambre): se agregó
+  `#indicador-grabando[hidden] { display: none; }` en `css/estilos.css`, el mismo patrón que ya
+  usan `#panel-config`/`#panel-editor`/`#zona-resultado` en el mismo archivo.
+- **Evidencia**: revisión de código confirma el patrón de especificidad y la corrección aplicada;
+  no se pudo confirmar visualmente en un iPhone real (mismo límite de toda la sesión).
+
+### ⬜ T15b. Velocidad máxima del slider, grabación que se corta a los ~20s, calidad de cámara
+
+- **Alcance**:
+  - INCLUYE:
+    1. **Ampliar el rango de velocidad**: el usuario pidió poder subir más la velocidad de lo que
+       permite hoy el slider (`VELOCIDAD_BASE_MIN=12`/`VELOCIDAD_BASE_MAX=45` en `js/ajustes.js`,
+       mismo rango en el `<input>` de `index.html`). Sube el máximo notablemente (ej. a 90-100
+       px/s) manteniendo el mínimo y el default (24) igual. Ajusta también el rango del `<input>`
+       en HTML para que coincida.
+    2. **Grabación que se corta ~20s pero el audio de fondo sigue**: bug grave — el video deja de
+       avanzar pero el `MediaRecorder` sigue corriendo (agrega audio) hasta que el usuario detiene
+       manualmente. Es un problema conocido de Safari iOS con grabaciones largas sin flush
+       periódico de datos, y/o con la pantalla bloqueándose o atenuándose durante la grabación
+       (iOS puede pausar la captura de video, no la de audio, cuando la pantalla se apaga).
+       Mitigaciones a aplicar en `js/camara.js`:
+       - Pasar un `timeslice` a `mediaRecorder.start(1000)` (chunks cada 1000ms) en vez de
+         `mediaRecorder.start()` sin argumentos — evita acumular todo en memoria sin volcar hasta
+         el final, causa conocida de cortes/corrupción en grabaciones largas en Safari iOS.
+       - Usar la Screen Wake Lock API (`navigator.wakeLock.request('screen')`) mientras se está
+         grabando, para evitar que la pantalla se atenúe/bloquee durante la grabación (causa
+         probable del corte de video). Debe pedirse al iniciar grabación y liberarse
+         (`.release()`) al detener. Si la API no existe en el navegador (`'wakeLock' in navigator`
+         es `false`), degradar sin romper nada — no es soportada en todas las versiones de Safari
+         iOS, documentar la limitación con un comentario.
+       - Documentar en un comentario que esto es la mejor mitigación posible sin poder reproducir
+         el bug en este entorno (sin cámara real); si persiste, puede requerir investigar límites
+         de memoria/duración de MediaRecorder en Safari iOS específicamente.
+    3. **Calidad de cámara**: el usuario nota que la imagen se ve peor que la cámara nativa del
+       iPhone. En `js/camara.js`, en las llamadas a `getUserMedia` (tanto `activarCamara()` como
+       `cambiarLente()`), pide una resolución más alta explícitamente en los constraints de video
+       (ej. `width: { ideal: 1920 }, height: { ideal: 1080 }` combinado con el `facingMode` ya
+       existente) — por defecto los navegadores suelen pedir una resolución conservadora si no se
+       especifica. Aclara en el reporte (para que se lo explique al usuario) que aun así nunca va
+       a igualar 100% a la app nativa de Cámara, porque esta última usa el pipeline completo de
+       procesamiento computacional de fotografía de iOS (HDR, estabilización, etc.) al que
+       `getUserMedia` no tiene acceso — pedir mayor resolución es la mejora real y disponible
+       vía web, no hay forma de igualar completamente la app nativa desde el navegador.
+  - NO INCLUYE: cambiar el mecanismo de grabación (sigue siendo `MediaRecorder`), ni comprimir/
+    post-procesar el video, ni tocar el modal de resultado de T14 salvo si el timeslice requiere
+    ajustar cómo se arma el `Blob` final (debería seguir funcionando igual, concatenando todos los
+    chunks acumulados).
+- **Archivos**: `js/ajustes.js`, `index.html`, `js/camara.js`.
+- **Definición de Hecho**:
+  - [ ] El slider de velocidad en Ajustes permite subir notablemente más que antes (nuevo máximo
+    documentado), sin romper el mínimo ni el comportamiento por defecto existente.
+  - [ ] `mediaRecorder.start()` pasa a usar un timeslice (ej. 1000ms) — confirmable leyendo el
+    código, ya que no se puede reproducir el bug de corte sin cámara real en este entorno.
+  - [ ] Se pide Screen Wake Lock al iniciar grabación y se libera al detener, con manejo defensivo
+    si la API no existe en el navegador (no debe lanzar excepción no capturada).
+  - [ ] Los constraints de `getUserMedia` (en ambos lugares donde se llama) piden una resolución
+    ideal más alta que antes.
+- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+
+---
+
 ## Bugs
 
 *Lo que el verificador o cualquiera encuentre fuera del alcance de la tarea en curso.
