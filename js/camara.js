@@ -46,6 +46,10 @@ let grabando = false;
 let mimeTypeElegido = "";
 let urlObjetoAnterior = null;
 
+// T15b, punto 2: referencia al Screen Wake Lock activo durante la grabación
+// (ver comentario detallado junto a iniciarGrabacion()).
+let wakeLock = null;
+
 // T13, punto 4: facingMode actualmente en uso. Arranca en "user" (frontal,
 // comportamiento previo a T13) pero se sobreescribe con la preferencia
 // guardada en localStorage (misma clave que usa js/ajustes.js) antes del
@@ -119,7 +123,7 @@ async function activarCamara() {
     // facingMode inicial la primera vez que se activa la cámara.
     facingModeActual = leerLentePreferida();
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facingModeActual },
+      video: { facingMode: facingModeActual, width: { ideal: 1920 }, height: { ideal: 1080 } },
       audio: true,
     });
     streamActual = stream;
@@ -198,7 +202,7 @@ export async function cambiarLente(nuevoFacingMode) {
   let streamNuevo;
   try {
     streamNuevo = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: nuevoFacingMode },
+      video: { facingMode: nuevoFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
       audio: true,
     });
   } catch (error) {
@@ -285,6 +289,9 @@ function iniciarGrabacion() {
     actualizarUiGrabacion();
     chunksGrabacion = [];
 
+    // T15b, punto 2: libera el Wake Lock (si se obtuvo) ahora que terminó la grabación.
+    liberarWakeLock();
+
     // T12, punto 5: al detener la grabación se pausa el scroll del teleprompter.
     pausarScroll();
 
@@ -300,16 +307,64 @@ function iniciarGrabacion() {
     mostrarMensaje("Ocurrió un error durante la grabación.");
     grabando = false;
     actualizarUiGrabacion();
+    liberarWakeLock();
     pausarScroll();
   });
 
-  mediaRecorder.start();
+  // T15b, punto 2: mitigación para el bug reportado de "grabación que se
+  // corta a los ~20s" (el video deja de avanzar pero el audio de fondo sigue
+  // sumando hasta detener manualmente). No se pudo reproducir el bug en este
+  // entorno (headless, sin cámara real), así que esto es la mejor mitigación
+  // posible basada en las dos causas conocidas en Safari iOS, no una
+  // confirmación de que el bug queda resuelto:
+  //   1. Falta de flush periódico de datos del MediaRecorder — start() sin
+  //      timeslice puede acumular todo en memoria y no volcar nada hasta el
+  //      final, causa conocida de cortes/corrupción en grabaciones largas.
+  //      Se mitiga pasando timeslice=1000ms para forzar "dataavailable" cada
+  //      segundo.
+  //   2. La pantalla apagándose/bloqueándose durante la grabación, que en iOS
+  //      puede pausar la captura de video sin pausar la de audio (de ahí que
+  //      el audio "siga" mientras el video se congela). Se mitiga pidiendo un
+  //      Screen Wake Lock mientras se graba.
+  mediaRecorder.start(1000);
   grabando = true;
   actualizarUiGrabacion();
+
+  pedirWakeLock();
 
   // T12, punto 5: grabar controla el teleprompter — arranca el scroll junto
   // con la grabación.
   iniciarScroll();
+}
+
+/**
+ * T15b, punto 2: pide el Screen Wake Lock de forma asíncrona, sin bloquear el
+ * flujo síncrono de iniciarGrabacion(). Degrada en silencio si la API no
+ * existe (no todas las versiones de Safari iOS la soportan) o si el navegador
+ * la rechaza (p. ej. pestaña no visible) — un console.warn informativo basta,
+ * no rompe la grabación en curso.
+ */
+function pedirWakeLock() {
+  if (!("wakeLock" in navigator)) {
+    console.warn("camara: Screen Wake Lock API no disponible en este navegador.");
+    return;
+  }
+  navigator.wakeLock
+    .request("screen")
+    .then((lock) => {
+      wakeLock = lock;
+    })
+    .catch((error) => {
+      console.warn("camara: no se pudo obtener el Screen Wake Lock:", error);
+    });
+}
+
+/** T15b, punto 2: libera el Wake Lock (si existe) al detener la grabación. */
+function liberarWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
 }
 
 // T14, punto 2: modal obligatorio de resultado. mostrarModalResultado() lo

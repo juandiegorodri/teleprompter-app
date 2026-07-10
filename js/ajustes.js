@@ -54,7 +54,7 @@ function acotarProporcionCamara(valor) {
 
 /** T13, punto 3: límites del slider de velocidad base (px/s). 24 = valor original. */
 const VELOCIDAD_BASE_MIN = 12;
-const VELOCIDAD_BASE_MAX = 45;
+const VELOCIDAD_BASE_MAX = 100;
 
 function acotarVelocidadBase(valor) {
   if (Number.isNaN(valor)) return 24;

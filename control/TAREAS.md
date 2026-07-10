@@ -726,7 +726,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 - **Evidencia**: revisión de código confirma el patrón de especificidad y la corrección aplicada;
   no se pudo confirmar visualmente en un iPhone real (mismo límite de toda la sesión).
 
-### ⬜ T15b. Velocidad máxima del slider, grabación que se corta a los ~20s, calidad de cámara
+### ✅ T15b. Velocidad máxima del slider, grabación que se corta a los ~20s, calidad de cámara
 
 - **Alcance**:
   - INCLUYE:
@@ -769,15 +769,32 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
     chunks acumulados).
 - **Archivos**: `js/ajustes.js`, `index.html`, `js/camara.js`.
 - **Definición de Hecho**:
-  - [ ] El slider de velocidad en Ajustes permite subir notablemente más que antes (nuevo máximo
-    documentado), sin romper el mínimo ni el comportamiento por defecto existente.
-  - [ ] `mediaRecorder.start()` pasa a usar un timeslice (ej. 1000ms) — confirmable leyendo el
+  - [x] El slider de velocidad en Ajustes permite subir notablemente más que antes (nuevo máximo
+    documentado), sin romper el mínimo ni el comportamiento por defecto existente. (`VELOCIDAD_BASE_MAX`
+    45→100 en ajustes.js; `max="100"` en el `<input>` de index.html; mínimo 12 y default 24 intactos.)
+  - [x] `mediaRecorder.start()` pasa a usar un timeslice (ej. 1000ms) — confirmable leyendo el
     código, ya que no se puede reproducir el bug de corte sin cámara real en este entorno.
-  - [ ] Se pide Screen Wake Lock al iniciar grabación y se libera al detener, con manejo defensivo
-    si la API no existe en el navegador (no debe lanzar excepción no capturada).
-  - [ ] Los constraints de `getUserMedia` (en ambos lugares donde se llama) piden una resolución
-    ideal más alta que antes.
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+    (`mediaRecorder.start(1000)` en `iniciarGrabacion()`.)
+  - [x] Se pide Screen Wake Lock al iniciar grabación y se libera al detener, con manejo defensivo
+    si la API no existe en el navegador (no debe lanzar excepción no capturada). (`pedirWakeLock()`
+    verifica `'wakeLock' in navigator` antes de llamar, con `.catch()` en la promesa — nunca lanza
+    sin capturar; `liberarWakeLock()` se llama tanto en el evento `stop` como en `error` del
+    MediaRecorder, así que el lock siempre se libera sin importar cómo termine la grabación.)
+  - [x] Los constraints de `getUserMedia` (en ambos lugares donde se llama) piden una resolución
+    ideal más alta que antes. (`width:{ideal:1920}, height:{ideal:1080}` agregado tanto en
+    `activarCamara()` como en `cambiarLente()`.)
+- **Evidencia del verificador**: Revisión de código línea por línea de los 3 archivos tocados.
+  Sintaxis validada (`node --check` en camara.js y ajustes.js, sin errores). Rango del slider
+  confirmado idéntico entre HTML (`min="12" max="100"`) y JS (`VELOCIDAD_BASE_MIN=12`,
+  `VELOCIDAD_BASE_MAX=100`) por grep. El manejo del Wake Lock es defensivo en los tres frentes que
+  importan: API ausente, promesa rechazada, y liberación garantizada en ambos caminos de salida
+  (stop/error) del MediaRecorder. **Nota importante — la más relevante de esta tarea**: el corte de
+  grabación a los ~20s es un bug reportado en un iPhone real que este entorno headless (sin cámara)
+  no puede reproducir ni confirmar que quedó resuelto. Lo aplicado es una mitigación basada en las
+  dos causas más probables y documentadas para ese síntoma específico en Safari iOS (falta de
+  flush periódico + pantalla apagándose durante la grabación), no una corrección verificada. El
+  usuario debe grabar un video largo (>20s) en su iPhone para confirmar si el problema desapareció;
+  si persiste, la causa puede ser otra y requerirá más investigación dirigida.
 
 ---
 
