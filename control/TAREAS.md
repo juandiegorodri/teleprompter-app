@@ -1228,7 +1228,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 17 — Flujo de grabación completo (equivalente a T12/T14 de la web)
 
-### ⬜ T24. Flujo de grabación: botón grande, indicador visible, modal obligatorio Descargar(a Fotos)/Descartar
+### ✅ T24. Flujo de grabación: botón grande, indicador visible, modal obligatorio Descargar(a Fotos)/Descartar
 
 - **Alcance**:
   - INCLUYE:
@@ -1257,16 +1257,37 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
   `ios/TelepromtCam/Camara/ModalResultado.swift`, `ios/TelepromtCam/Comun/GuardadoFotos.swift`
   (wrapper de `PHPhotoLibrary`), ajustes en `CamaraController`/`TeleprompterController` para el acople.
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
-  - [ ] Revisión de código: el modal es no-descartable salvo por sus dos botones; "Guardar en Fotos"
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [x] Revisión de código: el modal es no-descartable salvo por sus dos botones; "Guardar en Fotos"
     usa `PHPhotoLibrary.performChanges` y maneja el permiso (incluye el caso denegado con mensaje
     legible, sin crash); "Descartar" borra el temporal; ambos dejan la app lista para regrabar;
     iniciar/detener grabación arranca/para el scroll; el indicador rojo solo aparece grabando.
-  - [ ] `swiftc`/build confirman que no hay uso de API de Fotos sin el usage string (el string existe
+  - [x] `swiftc`/build confirman que no hay uso de API de Fotos sin el usage string (el string existe
     desde T16).
   - [ ] Prueba funcional completa (grabar, ver el modal, guardar al carrete y confirmarlo en Fotos,
     descartar): **la hace el usuario** en iPhone real (requiere cámara y carrete reales).
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`.
+  `ModalResultado.swift` revisado línea por línea: presentado con `.fullScreenCover` (sin
+  swipe-to-dismiss por defecto, a diferencia de `.sheet`), sin `.interactiveDismissDisabled`
+  adicional porque no hace falta, sin botón X, sin gesto de tap-fuera — el comentario del propio
+  código lo confirma como decisión deliberada. Los dos botones son los ÚNICOS caminos que llaman
+  `camaraController.limpiarUltimaGrabacion()` (que colapsa el binding de `.fullScreenCover` a
+  `false`) — confirmado por grep, no hay una tercera vía de cierre. `GuardadoFotos.guardarVideo`
+  usa `PHPhotoLibrary.requestAuthorization(for: .addOnly)` solo si `.notDetermined`, y el resultado
+  se modela como enum (`.exito`/`.permisoDenegado`/`.error`) — en `.permisoDenegado` el modal se
+  queda abierto con mensaje legible (no cierra silenciosamente ni crashea), dejando al usuario
+  decidir entre reintentar o descartar. El indicador rojo en `ContentView.swift` está envuelto en
+  `if camara.estaGrabando { Circle()... }` — la vista NO EXISTE en el árbol cuando no está grabando
+  (a diferencia del bug de la web T15a, donde `display:flex` con alta especificidad CSS ignoraba el
+  atributo `hidden`; en SwiftUI un `if` condicional no tiene ese riesgo de especificidad, la vista
+  simplemente no se construye). `.onChange(of: camara.estaGrabando)` llama `teleprompter.pausar()`
+  cubriendo tanto el stop manual como el que dispara el delegate de `AVCaptureFileOutputRecordingDelegate`
+  — un solo punto de verdad, sin duplicar la lógica de parada. Controles secundarios (ajustes,
+  editor) con `.disabled(!camaraLista)`. **Nota importante**: sin cámara/mic/carrete de Fotos reales
+  en este entorno, el flujo funcional completo (grabar, ver el modal con el clip real, guardar al
+  carrete y confirmarlo en la app Fotos, descartar) queda pendiente de la prueba del usuario en un
+  iPhone real. Con esto se cierra la Fase 17 (Flujo de grabación) — la app nativa ya tiene toda la
+  funcionalidad central equivalente a la web (T1-T15b).
 
 ---
 

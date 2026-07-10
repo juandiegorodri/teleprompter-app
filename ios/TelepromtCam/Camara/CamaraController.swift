@@ -223,6 +223,13 @@ final class CamaraController: NSObject {
         }
     }
 
+    /// Limpia `ultimaGrabacionURL` (T24: llamado por `ModalResultado` tras
+    /// guardar en Fotos o descartar) para cerrar el `.fullScreenCover` y
+    /// dejar la app lista para grabar de nuevo sin reiniciar nada más.
+    func limpiarUltimaGrabacion() {
+        ultimaGrabacionURL = nil
+    }
+
     /// Detiene la grabación en curso. Idempotente: si no hay grabación
     /// activa, no hace nada (no permite doble-detención inconsistente).
     func detenerGrabacion() {
