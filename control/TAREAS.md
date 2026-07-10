@@ -1074,7 +1074,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 14 — Teleprompter (overlay + scroll)
 
-### ⬜ T21. Overlay de texto sobre la cámara + scroll automático a velocidad configurable
+### ✅ T21. Overlay de texto sobre la cámara + scroll automático a velocidad configurable
 
 - **Alcance**:
   - INCLUYE: en `ios/TelepromtCam/Teleprompter/`, una vista `OverlayTeleprompter` superpuesta sobre el
@@ -1096,15 +1096,29 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
   `ios/TelepromtCam/Teleprompter/TeleprompterController.swift`,
   `ios/TelepromtCam/App/ContentView.swift` (compone overlay sobre preview).
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
-  - [ ] Revisión de código: el avance usa delta de tiempo real; `setVelocidad` es reactivo sin
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [x] Revisión de código: el avance usa delta de tiempo real; `setVelocidad` es reactivo sin
     reiniciar; el scroll clampa al final y se auto-detiene; el overlay respeta safe areas
     (`.safeAreaInset` o `env`-equivalente) y no tapa los controles.
-  - [ ] `setVelocidad(0)` detiene el avance y un factor mayor lo acelera proporcionalmente (verificable
+  - [x] `setVelocidad(0)` detiene el avance y un factor mayor lo acelera proporcionalmente (verificable
     por lógica; el punto de acople real llega en T22).
   - [ ] Prueba visual (fluidez del scroll sobre el video, legibilidad del overlay):
     **la hace el usuario**.
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`.
+  Leí `TeleprompterController.swift` línea por línea: `avanzar(hasta:)` calcula
+  `deltaSegundos = ahora.timeIntervalSince(anterior)` y avanza
+  `velocidadBase * factorVelocidad * deltaSegundos` — delta de tiempo real, exactamente el patrón
+  validado en la web T5, no conteo de frames. Detalle bien pensado que el reporte del constructor
+  explicó: el primer tick tras `iniciar()`/`reiniciar()` NO avanza (solo fija la referencia de
+  tiempo), evitando el bug típico de "salto gigante" por delta acumulado desde una pausa larga —
+  algo que ni la versión web tuvo que resolver explícitamente. `setVelocidad()` solo actualiza
+  `factorVelocidad` (clamped a ≥0), leído en vivo dentro de `avanzar()` — cambiarlo no reinicia
+  `ultimoTimestamp` ni interrumpe nada. El clamp de fin (`posicionMaximaPx`) se recalcula con
+  `actualizarAlturas()` y para `estaReproduciendo` automáticamente al alcanzarlo. `texto` con
+  `didSet` que reinicia el scroll al cambiar — deja el gancho listo para que T23 lo use sin fricción.
+  **Nota importante**: sin GUI interactiva en este entorno, no se pudo confirmar visualmente la
+  fluidez del scroll sobre el video real ni la legibilidad del overlay — el usuario debe confirmarlo
+  en simulador o iPhone real. Con esto se cierra la Fase 14 (Teleprompter).
 
 ---
 

@@ -3,6 +3,14 @@ import UIKit
 
 struct ContentView: View {
     @State private var camara = CamaraController()
+    @State private var ajustes = AjustesStore()
+    @State private var teleprompter: TeleprompterController
+
+    init() {
+        let ajustes = AjustesStore()
+        _ajustes = State(initialValue: ajustes)
+        _teleprompter = State(initialValue: TeleprompterController(ajustes: ajustes))
+    }
 
     var body: some View {
         ZStack {
@@ -14,6 +22,12 @@ struct ContentView: View {
             }
 
             VStack {
+                if camara.sesionActiva {
+                    OverlayTeleprompter(ajustes: ajustes, controlador: teleprompter)
+                        .padding(.horizontal, 8)
+                        .onAppear { teleprompter.iniciar() }
+                }
+
                 Spacer()
 
                 if let mensaje = camara.mensajeError {
