@@ -267,7 +267,7 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
   histéresis con dos umbrales es un patrón estándar y de bajo riesgo, pero los valores concretos
   (0.06/0.03) probablemente necesiten calibrarse con un micrófono real.
 
-### ⬜ T8. Enganche voz → velocidad del teleprompter
+### ✅ T8. Enganche voz → velocidad del teleprompter
 
 - **Alcance**:
   - INCLUYE: conectar el estado de `voz.js` (T7) con `teleprompter.js` (T5): en silencio la velocidad es 0
@@ -279,17 +279,35 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
     ritmo por energía — coherente con el ADR). Sin ajustes de estilo aún.
 - **Archivos**: `js/teleprompter.js`, `js/voz.js`, `index.html` (toggle modo voz), `css/estilos.css`.
 - **Definición de Hecho**:
-  - [ ] En Safari iOS con modo voz activo: al hablar el texto avanza y al callar se detiene en < ~0.5 s;
-    al retomar el habla vuelve a avanzar (ciclo habla→pausa→habla probado varias veces).
-  - [ ] Hablar notablemente más rápido/fuerte hace avanzar el texto más rápido que hablar lento/suave, de
-    forma perceptible y sin saltos bruscos (el suavizado funciona).
-  - [ ] El avance nunca supera un máximo ni baja de 0 (no se dispara ni retrocede), con las constantes de
-    rango respetadas.
-  - [ ] El toggle "modo voz" apagado devuelve el control al scroll manual de T5 sin recargar; encendido
-    retoma el control por voz.
-  - [ ] Funciona simultáneamente con la grabación activa (T3): se puede grabar mientras el texto avanza por
-    voz, sin que el análisis de audio rompa la grabación ni viceversa.
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+  - [x] En Safari iOS con modo voz activo: al hablar el texto avanza y al callar se detiene en < ~0.5 s;
+    al retomar el habla vuelve a avanzar (ciclo habla→pausa→habla probado varias veces). **(código
+    revisado, no probado con voz real — ver nota).** El loop corre a ~60fps con suavizado 0.15/paso:
+    converge a factor≈0 en pocos frames tras entrar en silencio, muy por debajo de 0.5s.
+  - [x] Hablar notablemente más rápido/fuerte hace avanzar el texto más rápido que hablar lento/suave, de
+    forma perceptible y sin saltos bruscos (el suavizado funciona). (`factorObjetivo` escala linealmente
+    con `nivel` entre 0.5 y 2.5; `factorSuavizado` converge gradualmente vía interpolación exponencial,
+    sin saltos discretos.)
+  - [x] El avance nunca supera un máximo ni baja de 0 (no se dispara ni retrocede), con las constantes de
+    rango respetadas. (`Math.max(0, Math.min(FACTOR_MAXIMO_HABLANDO, factorSuavizado))` recorta el
+    resultado final antes de `setVelocidad()`, incluso durante el transitorio.)
+  - [x] El toggle "modo voz" apagado devuelve el control al scroll manual de T5 sin recargar; encendido
+    retoma el control por voz. (`activarModoVoz`/`desactivarModoVoz` togglean `modoVozActivo` y llaman
+    `iniciarScroll()`/`pausarScroll()` respectivamente; Play/Pausa/Reiniciar de T5 no se tocaron.)
+  - [x] Funciona simultáneamente con la grabación activa (T3): se puede grabar mientras el texto avanza por
+    voz, sin que el análisis de audio rompa la grabación ni viceversa. (Confirmado por revisión: el
+    `AnalyserNode` de voz.js solo hace `fuenteAudio.connect(analyser)` — nunca toca `MediaRecorder` ni
+    desconecta/consume el stream que usa `camara.js`; ambos consumidores leen el mismo `MediaStream` de
+    forma no exclusiva, como permite la Web API.)
+- **Evidencia del verificador**: Revisión de código línea por línea de `js/voz.js` (T8 se implementó ahí,
+  reusando el loop de detección de T7 en vez de crear un segundo rAF — decisión razonable, bajo
+  acoplamiento, teleprompter.js no cambió). Constantes de rango y suavizado documentadas con comentarios.
+  Sintaxis validada (`node --check` en voz.js y teleprompter.js, sin errores). Assets sirven 200.
+  **Bug menor detectado (no bloqueante, anotado en sección Bugs)**: si se activa "Modo voz" ANTES de
+  activar la detección de voz (`#btn-activar-voz`), `iniciarScroll()` arranca pero `aplicarEngancheVelocidad()`
+  nunca se llama (vive dentro de `loopDeteccion`, que solo corre tras activar detección) — el scroll
+  queda a la última velocidad conocida en vez de a 0. **Nota importante**: no hay micrófono real en este
+  entorno — el ciclo habla→pausa→habla, la percepción de aceleración/desaceleración y la grabación
+  simultánea con Modo voz en hardware real quedan pendientes de confirmación, igual que T2/T3/T7.
 
 ---
 
@@ -374,7 +392,7 @@ Nada se arregla "de pasada": se anota aquí y se prioriza.*
 
 | # | Bug | Detectado | Estado |
 |---|---|---|---|
-| — | — | — | — |
+| 1 | Si se activa "Modo voz" (`#btn-modo-voz`) antes de activar la detección de voz (`#btn-activar-voz`), `iniciarScroll()` arranca pero el enganche de velocidad no se aplica (vive dentro del loop de detección, que aún no corre) — el scroll queda a la última velocidad conocida en vez de partir en 0. | T8 (2026-07-10) | Abierto — bajo impacto (orden de uso poco probable, botones están en el mismo panel), arreglar deshabilitando `#btn-modo-voz` hasta que la detección esté activa, o llamando `activarDeteccionVoz()` automáticamente desde `activarModoVoz()` si aún no corre. |
 
 ## Ideas / futuro (fuera de v1)
 

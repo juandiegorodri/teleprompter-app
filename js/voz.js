@@ -5,6 +5,7 @@ console.log("cargado: voz");
 // NO acopla con teleprompter.js (eso es T8) ni reconoce palabras: solo mide energía de audio.
 
 import { obtenerStream } from "./camara.js";
+import { setVelocidad, iniciarScroll, pausarScroll } from "./teleprompter.js";
 
 // --- Umbrales de histéresis (ajustables) ---
 // Se comparan contra el nivel RMS normalizado (0-1). UMBRAL_ENTRAR > UMBRAL_SALIR
@@ -12,6 +13,23 @@ import { obtenerStream } from "./camara.js";
 // y bajar del umbral bajo para volver a "silencio".
 const UMBRAL_ENTRAR_HABLA = 0.06;
 const UMBRAL_SALIR_HABLA = 0.03;
+
+// --- T8: Enganche voz -> velocidad del teleprompter ---
+// Se implementa aquí (en voz.js, importando de teleprompter.js) porque voz.js ya
+// contiene el loop de análisis de audio (requestAnimationFrame) y el estado de
+// habla/nivel: reusar ese mismo loop para calcular y aplicar el factor de velocidad
+// evita un segundo rAF/setInterval redundante y mantiene toda la lógica de "modo voz"
+// en un solo lugar. teleprompter.js no necesita saber nada de voz.js (bajo acoplamiento).
+
+// Rango del factor de velocidad cuando se está hablando (1 = velocidad base de T5).
+const FACTOR_MINIMO_HABLANDO = 0.5;
+const FACTOR_MAXIMO_HABLANDO = 2.5;
+// Peso de la interpolación exponencial por paso (0-1): más alto = reacciona más rápido
+// pero con más saltos; más bajo = más suave pero más lento para responder.
+const SUAVIZADO = 0.15;
+
+let modoVozActivo = false;
+let factorSuavizado = 0;
 
 let audioContext = null;
 let analyser = null;
@@ -85,8 +103,30 @@ function loopDeteccion() {
   }
 
   actualizarIndicadorVisual();
+  aplicarEngancheVelocidad();
 
   rafId = requestAnimationFrame(loopDeteccion);
+}
+
+/**
+ * Calcula el factor de velocidad objetivo a partir de estaHablando()/nivelActual(),
+ * lo suaviza con interpolación exponencial y lo aplica vía setVelocidad() de
+ * teleprompter.js. Solo actúa si el modo voz está activo (modoVozActivo).
+ */
+function aplicarEngancheVelocidad() {
+  if (!modoVozActivo) return;
+
+  const factorObjetivo = hablando
+    ? FACTOR_MINIMO_HABLANDO + nivel * (FACTOR_MAXIMO_HABLANDO - FACTOR_MINIMO_HABLANDO)
+    : 0;
+
+  factorSuavizado += (factorObjetivo - factorSuavizado) * SUAVIZADO;
+
+  // Recorte defensivo: nunca por debajo de 0 ni por encima del máximo, incluso
+  // durante el transitorio del suavizado.
+  const factorFinal = Math.max(0, Math.min(FACTOR_MAXIMO_HABLANDO, factorSuavizado));
+
+  setVelocidad(factorFinal);
 }
 
 async function activarDeteccionVoz() {
@@ -147,4 +187,45 @@ if (btnActivarVoz) {
   btnActivarVoz.addEventListener("click", activarDeteccionVoz);
 } else {
   console.error("No se encontró el botón #btn-activar-voz");
+}
+
+// --- Toggle "Modo voz" (T8) ---
+// ON: el enganche de voz controla la velocidad (arranca el scroll si no corría) y
+// los controles manuales Play/Pausa/Reiniciar de T5 quedan secundarios (siguen
+// funcionando, pero cada paso del loop de voz vuelve a imponer su factor).
+// OFF: se detiene el enganche (deja de llamar a setVelocidad) y el scroll queda
+// bajo control manual normal, tal como en T5.
+const btnModoVoz = document.getElementById("btn-modo-voz");
+
+function actualizarEtiquetaModoVoz() {
+  if (!btnModoVoz) return;
+  btnModoVoz.textContent = modoVozActivo ? "Modo voz: ON" : "Modo voz: OFF";
+  btnModoVoz.setAttribute("aria-pressed", String(modoVozActivo));
+}
+
+function activarModoVoz() {
+  modoVozActivo = true;
+  factorSuavizado = 0;
+  iniciarScroll();
+  actualizarEtiquetaModoVoz();
+}
+
+function desactivarModoVoz() {
+  modoVozActivo = false;
+  // Al soltar el control por voz se pausa el scroll; el usuario retoma con
+  // Play/Pausa/Reiniciar (T5), que siguen funcionando igual.
+  pausarScroll();
+  actualizarEtiquetaModoVoz();
+}
+
+if (btnModoVoz) {
+  btnModoVoz.addEventListener("click", () => {
+    if (modoVozActivo) {
+      desactivarModoVoz();
+    } else {
+      activarModoVoz();
+    }
+  });
+} else {
+  console.warn("voz: no se encontró el botón #btn-modo-voz");
 }
