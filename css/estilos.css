@@ -38,6 +38,12 @@ html, body {
   border: 2px solid #0ff;
   background: rgba(0, 255, 255, 0.08);
   overflow: hidden;
+  /* T11: evita que el borde superior / indicador de grabación queden bajo el
+     notch o la isla dinámica en iOS (safe-area). Fallback 0px para navegadores
+     sin soporte de env(). */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 #video-camara {
@@ -111,6 +117,11 @@ html, body {
   align-items: center;
   gap: 0.5em;
   padding: 0.5em;
+  /* T11: evita que los botones queden bajo la barra de gestos inferior de
+     iOS (home indicator) en modo standalone. Fallback 0px sin soporte env(). */
+  padding-bottom: calc(0.5em + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(0.5em + env(safe-area-inset-left, 0px));
+  padding-right: calc(0.5em + env(safe-area-inset-right, 0px));
 }
 
 #btn-grabar:disabled {

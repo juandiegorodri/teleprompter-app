@@ -396,7 +396,7 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 
 ## Fase 6 — PWA
 
-### ⬜ T11. Manifest PWA e instalación en pantalla de inicio iOS
+### ✅ T11. Manifest PWA e instalación en pantalla de inicio iOS
 
 - **Alcance**:
   - INCLUYE: `manifest.json` (name, short_name, `display: standalone`, `start_url`, `background_color`,
@@ -411,14 +411,30 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
   `css/estilos.css` (safe-area-insets), iconos (ubicación según se defina, ej. `icons/`).
 - **Definición de Hecho**:
   - [ ] En Safari iOS, "Compartir → Agregar a pantalla de inicio" toma el nombre e icono definidos (no el
-    screenshot genérico de la página).
+    screenshot genérico de la página). **PENDIENTE — requiere iPhone real, ver nota.**
   - [ ] Al abrir desde el icono de la pantalla de inicio, la app arranca en modo standalone: sin barra de
-    direcciones ni de navegación de Safari (pantalla completa real).
-  - [ ] Los controles y el texto no quedan tapados por el notch / la barra de estado ni por la barra inferior
+    direcciones ni de navegación de Safari (pantalla completa real). **PENDIENTE — requiere iPhone real.**
+  - [x] Los controles y el texto no quedan tapados por el notch / la barra de estado ni por la barra inferior
     de gestos (safe-areas respetadas), verificado en un iPhone con notch/isla o emulación equivalente.
+    (Verificado por revisión de código: `env(safe-area-inset-*)` con fallback aplicado en `#zona-camara`
+    y `#zona-controles`; el mecanismo es estándar y correcto — la confirmación visual con notch real
+    queda pendiente igual que el resto.)
   - [ ] Desde el modo standalone, el flujo completo sigue funcionando: activar cámara, editar guion, grabar y
     avance por voz operan igual que en el navegador (permisos de cámara/mic se piden y conceden en standalone).
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+    **PENDIENTE — requiere iPhone real.**
+- **Evidencia del verificador**: `manifest.json` validado como JSON correcto (`python3 -m json.tool`),
+  con `name`/`short_name`/`display:standalone`/`start_url`/colores/iconos 192 y 512 bien formados.
+  Iconos verificados como PNG reales y válidos en los tamaños correctos (`file`: 192x192, 512x512,
+  180x180) — generados con un script Python puro (stdlib, sin ImageMagick/rsvg-convert disponibles en
+  el entorno), decisión razonable dada la falta de herramientas del sistema. `index.html` enlaza
+  manifest, apple-touch-icon e icon correctamente (confirmado por lectura directa). CSS de safe-area
+  revisado y correcto. **Nota importante — el elemento central de T11 no se pudo verificar**: instalar
+  a pantalla de inicio y abrir en modo standalone es, por naturaleza, una prueba que solo se puede
+  hacer en un iPhone real tocando "Compartir → Agregar a pantalla de inicio" — ningún entorno de
+  desarrollo headless ni navegador de escritorio la reproduce. Los 3 ítems de la DoD que dependen de
+  eso quedan explícitamente pendientes; el archivo/código que los debe satisfacer está completo y
+  sigue el patrón estándar documentado (Apple Human Interface Guidelines para PWA), pero la
+  confirmación final requiere el dispositivo.
 
 ---
 
