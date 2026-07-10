@@ -884,7 +884,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 12 — Cámara nativa (AVCaptureSession)
 
-### ⬜ T17. Preview de cámara en vivo con AVCaptureSession + permisos runtime
+### ✅ T17. Preview de cámara en vivo con AVCaptureSession + permisos runtime
 
 - **Alcance**:
   - INCLUYE: en `ios/TelepromtCam/Camara/`, una clase `CamaraController` (`@Observable` o
@@ -906,16 +906,28 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
   `ios/TelepromtCam/Camara/PreviewCamara.swift`, `ios/TelepromtCam/App/ContentView.swift`
   (integra el preview y el botón).
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
-  - [ ] Revisión de código: la sesión se configura y arranca en un hilo dedicado; el
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [x] Revisión de código: la sesión se configura y arranca en un hilo dedicado; el
     `AVCaptureVideoPreviewLayer` usa `.resizeAspectFill`; el permiso denegado produce un mensaje
     legible en pantalla y no una excepción/crash.
-  - [ ] El controlador expone la `AVCaptureSession` y el `AVCaptureDeviceInput` de audio de forma
+  - [x] El controlador expone la `AVCaptureSession` y el `AVCaptureDeviceInput` de audio de forma
     accesible para T18/T22 (verificable por lectura de la interfaz pública del tipo).
   - [ ] Prueba visual (ver imagen en vivo de la cámara frontal, prompt de permiso real):
     **la hace el usuario** en simulador (nota: el simulador de iOS no tiene cámara física — el
     usuario debe probar el camino feliz en iPhone real; el simulador sirve para permisos/UI).
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`.
+  Revisión de `CamaraController.swift` línea por línea: `colaSesion` (DispatchQueue serial dedicada)
+  para `startRunning()`/`stopRunning()`/configuración, nunca en main; `PreviewCamara.swift` confirma
+  `videoGravity = .resizeAspectFill`; `solicitarPermisosYActivar()` verifica el estado ANTES de
+  llamar `requestAccess` — si ya es `.denied`/`.restricted` no reintenta, solo actualiza el mensaje
+  (exactamente la lección anotada por el arquitecto, bien aplicada); mensajes de error legibles y
+  distintos para cámara/micrófono/lente no disponible, todo vía estado observable sin crashear.
+  `session` (let público) y `entradaAudio`/`entradaVideo` (`private(set) var`) quedan expuestos con
+  buena semántica para T18/T22. **Nota importante**: el simulador de iOS no tiene cámara física —
+  ni el constructor ni esta verificación pudieron confirmar el stream de video real ni el prompt de
+  permiso real en pantalla. El usuario debe probar en un iPhone real: activar cámara, confirmar
+  el prompt del sistema, ver el preview en vivo, y el camino de denegar permiso (mensaje + botón a
+  Ajustes).
 
 ### ⬜ T18. Selección de lente frontal/trasera + grabación con AVCaptureMovieFileOutput
 
