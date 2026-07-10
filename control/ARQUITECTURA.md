@@ -54,3 +54,40 @@ archivo por archivo vive en MAPA.md.
 - **Descartado**: Vercel/Netlify (el usuario ya había descartado hosting externo antes; GitHub
   Pages es la opción más directa dado que ya se pedía crear el repo en GitHub); repo privado
   (GitHub Pages gratis no funciona en repos privados en el plan free).
+
+### 2026-07-10 — App nativa iOS (SwiftUI + AVFoundation) en `ios/`, dentro del mismo repo
+
+- **Porqué**: tras varias rondas de bugs de calidad/control de cámara achacables a las
+  limitaciones de `getUserMedia`/`MediaRecorder` en Safari (resolución, fps, corte de grabación),
+  el usuario pidió pasar a una app nativa de iOS con control real de calidad de cámara, fps y
+  lente — eso solo lo da `AVFoundation` (`AVCaptureSession`), no la Web API. El usuario confirmó
+  que ya tiene cuenta de Apple Developer y decidió el enfoque nativo completo (no un wrapper
+  WKWebView) precisamente para resolver el problema de raíz. Vive en `ios/` dentro del mismo repo
+  `teleprompter-app` (decisión del usuario) — un solo lugar para toda la historia del proyecto,
+  aunque son dos plataformas con dos stacks independientes sin código compartido.
+  - Bundle identifier: `com.juandiegorodri.teleprompter`. Nombre en App Store: **TelepromtCam**.
+  - UI: SwiftUI (declarativa, moderna, menos código que UIKit para overlays/paneles de ajustes).
+  - Cámara: `AVCaptureSession` con `AVCaptureDevice` — permite elegir resolución/preset, fps
+    (`activeVideoMinFrameDuration`/`activeVideoMaxFrameDuration`), y lente (`.builtInWideAngleCamera`
+    frontal/trasera) de verdad, a diferencia de los `constraints` "ideales" (no garantizados) de
+    `getUserMedia`.
+  - Grabación: `AVCaptureMovieFileOutput` (o `AVAssetWriter` si se necesita más control fino),
+    sin el bug de corte de `MediaRecorder` en Safari — la captura nativa no depende de que la
+    pestaña/pantalla no se atenúe de la misma forma que en un navegador.
+  - Detección de voz: `AVAudioEngine` con un `installTap` sobre el nodo de entrada, mismo enfoque
+    conceptual de VAD por energía RMS que en la web (mismo ADR de "no Web Speech API" — se
+    mantiene: no hace falta transcribir, solo medir energía/ritmo).
+  - Persistencia: `UserDefaults` para ajustes simples (equivalente nativo de `localStorage`);
+    `FileManager` (carpeta de Documentos de la app) para el guion de texto si crece mucho.
+  - Sin backend, sin dependencias de terceros (SPM/CocoaPods) salvo que una tarea puntual lo
+    justifique con su propio ADR — mismo espíritu de "lo aburrido y probado" que en la web.
+- **Descartado**: WKWebView wrapper de la web app (no resuelve el problema de raíz que motivó el
+  cambio — sigue limitado por lo que expone el navegador); Objective-C (SwiftUI/Swift es el
+  estándar actual, sin razón para el lenguaje legado); React Native/Flutter (el usuario pidió
+  explícitamente nativo con "librerías adecuadas" para máxima calidad — un framework
+  multiplataforma reintroduce una capa de abstracción sobre la cámara, justo lo que se quiere
+  evitar).
+- **Límite importante que el arquitecto debe comunicarle al usuario**: la publicación real en App
+  Store (firmar con el Apple Developer Program, subir el build vía Xcode/Transporter, completar
+  App Store Connect) es una acción que solo el usuario puede ejecutar con sus propias credenciales
+  — el agente deja el proyecto, los assets y los textos listos, pero no ejecuta el submit.
