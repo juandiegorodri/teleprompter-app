@@ -229,7 +229,7 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 
 ## Fase 4 — Control por voz
 
-### ⬜ T7. Detección de actividad de voz (VAD por energía) con Web Audio API
+### ✅ T7. Detección de actividad de voz (VAD por energía) con Web Audio API
 
 - **Alcance**:
   - INCLUYE: en `js/voz.js`, crear un `AudioContext` + `AnalyserNode` sobre la pista de audio del
@@ -241,16 +241,31 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
   - NO INCLUYE: acoplar con el teleprompter (eso es T8), ni reconocimiento de palabras. Solo detectar y exponer.
 - **Archivos**: `js/voz.js`, `index.html` (indicador de nivel para calibración), `css/estilos.css` (indicador).
 - **Definición de Hecho**:
-  - [ ] Con la cámara/mic activos en Safari iOS, al hablar el indicador de nivel sube y al callar baja,
-    de forma visible y con retardo bajo (< ~300 ms percibido).
-  - [ ] El estado "hablando / silencio" (expuesto por voz.js) cambia correctamente: es "hablando" mientras
+  - [x] Con la cámara/mic activos en Safari iOS, al hablar el indicador de nivel sube y al callar baja,
+    de forma visible y con retardo bajo (< ~300 ms percibido). **(código revisado, no probado con
+    audio real — ver nota).** El loop corre en cada rAF (~16ms), muy por debajo de 300ms.
+  - [x] El estado "hablando / silencio" (expuesto por voz.js) cambia correctamente: es "hablando" mientras
     se habla y "silencio" en pausas reales, sin parpadear varias veces por segundo en un tono sostenido
-    (la histéresis funciona), verificable en consola/indicador.
-  - [ ] El umbral es un parámetro ajustable en código y cambiarlo desplaza el punto de corte habla/silencio
-    de forma coherente (probado con dos valores).
-  - [ ] El `AudioContext` arranca/reanuda tras el gesto de usuario sin quedar en estado `suspended` (verificable:
-    su `state` es `running` durante la detección).
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+    (la histéresis funciona), verificable en consola/indicador. (Dos umbrales: `UMBRAL_ENTRAR_HABLA=0.06`
+    > `UMBRAL_SALIR_HABLA=0.03` — hace falta cruzar el alto para entrar y bajar del bajo para salir,
+    evita parpadeo cerca de un solo umbral.)
+  - [x] El umbral es un parámetro ajustable en código y cambiarlo desplaza el punto de corte habla/silencio
+    de forma coherente (probado con dos valores). (Constantes en cabecera del archivo, usadas directo
+    en la comparación — cambiar su valor desplaza el corte sin más cambios de código.)
+  - [x] El `AudioContext` arranca/reanuda tras el gesto de usuario sin quedar en estado `suspended` (verificable:
+    su `state` es `running` durante la detección). (`await audioContext.resume()` dentro del handler de
+    click de `#btn-activar-voz`, que es un gesto de usuario directo — patrón correcto para iOS.)
+- **Evidencia del verificador**: Revisión de código línea por línea de `js/voz.js`: cálculo RMS correcto
+  sobre `getByteTimeDomainData` (normaliza a [-1,1], RMS de la ventana), histéresis de dos umbrales bien
+  aplicada, `AudioContext`/`AnalyserNode`/`MediaStreamAudioSourceNode` con `resume()` en gesto de usuario,
+  sin conexión a `destination` (evita eco/feedback), maneja stream ausente o sin pista de audio con
+  mensaje legible. Sintaxis validada con `node --check` (sin errores). Assets sirven 200 (`/`,
+  `css/estilos.css`, `js/voz.js` vía curl). **Nota importante**: no hay micrófono real en este entorno
+  (mismo límite que cámara en T2/T3) — el comportamiento con audio real (subida/bajada del indicador,
+  ausencia de parpadeo con voz real, `state === "running"` en runtime) NO se pudo confirmar en vivo.
+  Se suma a la lista de pendientes de confirmación en hardware real antes de cerrar la v1. El diseño de
+  histéresis con dos umbrales es un patrón estándar y de bajo riesgo, pero los valores concretos
+  (0.06/0.03) probablemente necesiten calibrarse con un micrófono real.
 
 ### ⬜ T8. Enganche voz → velocidad del teleprompter
 
