@@ -57,6 +57,19 @@ function ocultarMensaje() {
 
 async function activarCamara() {
   ocultarMensaje();
+
+  // getUserMedia solo existe en "contexto seguro" (HTTPS o localhost). Sobre
+  // http://<ip-local> en Safari iOS, navigator.mediaDevices es undefined y el
+  // error real queda oculto detrás de un TypeError genérico si no se detecta antes.
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    mostrarMensaje(
+      "Esta página no se está sirviendo por HTTPS (ni es localhost), así que Safari no permite " +
+      "usar la cámara aquí — esto no es un permiso que puedas activar desde Ajustes. Abre la app " +
+      "desde una URL https:// (por ejemplo un túnel HTTPS) e inténtalo de nuevo."
+    );
+    return;
+  }
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user" },
@@ -74,7 +87,8 @@ async function activarCamara() {
     console.error("Error al acceder a la cámara/micrófono:", error);
     let texto = "No se pudo acceder a la cámara. Revisa los permisos e inténtalo de nuevo.";
     if (error && (error.name === "NotAllowedError" || error.name === "PermissionDeniedError")) {
-      texto = "Permiso de cámara/micrófono denegado. Actívalo en Ajustes para usar el teleprompter.";
+      texto = "Permiso de cámara/micrófono denegado. Actívalo en Ajustes → Safari (o Ajustes de " +
+        "esta app) para usar el teleprompter.";
     } else if (error && error.name === "NotFoundError") {
       texto = "No se encontró ninguna cámara disponible en este dispositivo.";
     }
