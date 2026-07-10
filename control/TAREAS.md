@@ -25,7 +25,7 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 
 ## Fase 1 — Esqueleto y cámara
 
-### ⬜ T1. Esqueleto de la app y servidor estático
+### ✅ T1. Esqueleto de la app y servidor estático
 
 - **Alcance**:
   - INCLUYE: `index.html` mínimo con `<head>` correcto para iOS (viewport con `viewport-fit=cover`,
@@ -38,15 +38,20 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 - **Archivos**: `index.html`, `css/estilos.css`, `js/camara.js`, `js/voz.js`,
   `js/teleprompter.js`, `js/editor.js`, `js/ajustes.js`.
 - **Definición de Hecho**:
-  - [ ] Sirviendo la carpeta con un estático local y abriendo la raíz, la página carga sin error 404
+  - [x] Sirviendo la carpeta con un estático local y abriendo la raíz, la página carga sin error 404
     de ningún archivo (verificar en la pestaña Network/consola: los 5 JS y el CSS cargan 200).
-  - [ ] La consola muestra los 5 `console.log` de "cargado" (uno por módulo), confirmando que los
+  - [x] La consola muestra los 5 `console.log` de "cargado" (uno por módulo), confirmando que los
     `type="module"` se resuelven sin error de ruta ni de sintaxis.
-  - [ ] En Safari iOS la página ocupa el 100% del alto visible sin barra de scroll vertical de página
+  - [x] En Safari iOS la página ocupa el 100% del alto visible sin barra de scroll vertical de página
     y sin desbordes horizontales (probado en iPhone o emulación).
-  - [ ] Las tres zonas (cámara / texto / controles) son visibles y distinguibles (bordes o colores de
+  - [x] Las tres zonas (cámara / texto / controles) son visibles y distinguibles (bordes o colores de
     placeholder) en el layout.
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+- **Evidencia del verificador**: Servido con `serve -l 8080` sobre la carpeta del proyecto y probado
+  en navegador (viewport móvil vía Claude Browser preview, no iPhone físico). Network: index.html,
+  css/estilos.css y los 5 js responden 200. Consola: aparecen los 5 "cargado: <módulo>". Screenshot:
+  tres zonas con bordes de color distintos, sin scroll de página, ocupando el 100% del viewport.
+  Nota: no probado en Safari iOS real — pendiente confirmar en dispositivo cuando esté disponible;
+  el emulador de navegador confirma el comportamiento estándar de viewport/CSS.
 
 ### ⬜ T2. Vista previa de cámara con getUserMedia
 
@@ -62,13 +67,23 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 - **Definición de Hecho**:
   - [ ] Al tocar "Activar cámara" en Safari iOS aparece el prompt nativo de permiso y, al aceptar, se
     ve la imagen en vivo de la cámara frontal dentro de la zona cámara, sin saltar a pantalla completa
-    nativa (confirma que `playsinline` funciona).
-  - [ ] El video llena su zona sin deformar la relación de aspecto (usa `object-fit: cover` o equivalente).
-  - [ ] Si el usuario deniega el permiso, aparece un mensaje de error legible en pantalla (no solo consola)
+    nativa (confirma que `playsinline` funciona). **PENDIENTE — ver nota.**
+  - [x] El video llena su zona sin deformar la relación de aspecto (usa `object-fit: cover` o equivalente).
+  - [x] Si el usuario deniega el permiso, aparece un mensaje de error legible en pantalla (no solo consola)
     y la app no queda en blanco ni lanza excepción no capturada.
   - [ ] La referencia al `MediaStream` queda accesible para los módulos siguientes (verificable en consola:
-    existe y tiene pistas de video y audio).
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+    existe y tiene pistas de video y audio). **PENDIENTE — ver nota.**
+- **Evidencia del verificador**: Código revisado, DOM inspeccionado (`#video-camara` con `autoplay`,
+  `playsInline`, `muted`; `object-fit:cover` confirmado por `preview_inspect`, llena el 100% de su zona).
+  Probado clic real en "Activar cámara" en el entorno de navegador de preview: como esa máquina no tiene
+  cámara física, arrojó `NotFoundError` — y la app lo manejó bien: mensaje legible "No se encontró ninguna
+  cámara disponible en este dispositivo" visible en pantalla, sin excepción no capturada ni pantalla en
+  blanco (ese ítem de la DoD queda confirmado). **Nota importante**: el entorno de este equipo/preview no
+  tiene cámara, así que el camino feliz (ver imagen en vivo, `playsinline` real en Safari, `MediaStream`
+  con pistas) NO se pudo verificar aquí — requiere probarlo en un iPhone real o un navegador de escritorio
+  con cámara conectada. Queda marcado como pendiente de confirmación manual antes de dar la app por
+  completa; se avisó al usuario. El código sigue el patrón estándar (`getUserMedia` + `srcObject`) que
+  debería funcionar con hardware real; el riesgo residual es específico de Safari iOS (`playsinline`).
 
 ### ⬜ T3. Grabación con MediaRecorder (iniciar / detener / obtener el video)
 
@@ -84,14 +99,24 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
   `css/estilos.css` (indicador de grabación).
 - **Definición de Hecho**:
   - [ ] En Safari iOS: tap en "Grabar" inicia la captura (indicador visible), tap en "Detener" la para,
-    y aparece un video reproducible con la grabación real de la cámara+audio.
+    y aparece un video reproducible con la grabación real de la cámara+audio. **PENDIENTE — ver nota.**
   - [ ] El video resultante se puede reproducir dentro de la app y guardar en el dispositivo (descarga o
-    "guardar video" desde el reproductor), verificado abriéndolo tras guardarlo.
-  - [ ] El mimeType elegido se registra en consola y corresponde a uno que `isTypeSupported` confirmó;
-    si `video/mp4` no está soportado, cae a la alternativa sin romperse.
-  - [ ] Grabar → detener → grabar de nuevo funciona al menos dos veces seguidas sin recargar la página
-    (no deja el recorder en estado inválido).
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+    "guardar video" desde el reproductor), verificado abriéndolo tras guardarlo. **PENDIENTE — ver nota.**
+  - [x] El mimeType elegido se registra en consola y corresponde a uno que `isTypeSupported` confirmó;
+    si `video/mp4` no está soportado, cae a la alternativa sin romperse. (Verificado por revisión de
+    código: `elegirMimeType()` prueba mp4 → webm/vp9 → webm/vp8 → webm en orden con `isTypeSupported`,
+    loguea el resultado.)
+  - [x] Grabar → detener → grabar de nuevo funciona al menos dos veces seguidas sin recargar la página
+    (no deja el recorder en estado inválido). (Verificado por revisión de código: cada `iniciarGrabacion`
+    resetea `chunksGrabacion`, crea un `MediaRecorder` nuevo y `detenerGrabacion` solo actúa si
+    `state !== "inactive"`; no hay estado compartido que se corrompa entre grabaciones.)
+- **Evidencia del verificador**: Código de `js/camara.js` revisado línea por línea: manejo de eventos
+  `dataavailable`/`stop`/`error` correcto, `Blob` + `URL.createObjectURL` con revocación de la URL
+  anterior (sin fuga de memoria), botón deshabilitado hasta que hay stream activo (confirmado en DOM:
+  `#btn-grabar.disabled === true` sin cámara). **Nota importante**: este entorno no tiene cámara física
+  (mismo límite que T2), así que NO se pudo grabar un video real ni confirmar reproducción/descarga
+  real. Esos dos ítems quedan pendientes de una prueba en iPhone real o navegador de escritorio con
+  cámara — se avisó al usuario, junto con el mismo pendiente de T2.
 
 ---
 

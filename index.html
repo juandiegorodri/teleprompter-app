@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Teleprompter</title>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <div id="zona-camara">
+    <video id="video-camara" autoplay playsinline muted></video>
+    <p id="mensaje-camara" role="alert" hidden></p>
+    <span id="indicador-grabando" hidden>● Grabando</span>
+  </div>
+  <div id="zona-texto"></div>
+  <div id="zona-controles">
+    <button id="btn-activar-camara" type="button">Activar cámara</button>
+    <button id="btn-grabar" type="button" disabled>Grabar</button>
+  </div>
+  <div id="zona-resultado">
+    <video id="video-resultado" controls hidden></video>
+    <a id="enlace-descarga" download="grabacion.webm" hidden>Descargar video</a>
+  </div>
+
+  <script type="module" src="js/camara.js"></script>
+  <script type="module" src="js/voz.js"></script>
+  <script type="module" src="js/teleprompter.js"></script>
+  <script type="module" src="js/editor.js"></script>
+  <script type="module" src="js/ajustes.js"></script>
+</body>
+</html>

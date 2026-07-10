@@ -1,0 +1,125 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, system-ui, sans-serif;
+  background: #000;
+}
+
+#zona-camara {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 60%;
+  border: 2px solid #0ff;
+  background: rgba(0, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+#video-camara {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+#mensaje-camara {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 85%;
+  text-align: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 0.75em 1em;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+#zona-texto {
+  position: absolute;
+  top: 60%;
+  left: 0;
+  width: 100%;
+  height: 25%;
+  border: 2px solid #ff0;
+  background: rgba(255, 255, 0, 0.08);
+}
+
+#zona-controles {
+  position: absolute;
+  top: 85%;
+  left: 0;
+  width: 100%;
+  height: 15%;
+  border: 2px solid #f0f;
+  background: rgba(255, 0, 255, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5em;
+}
+
+#btn-grabar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#indicador-grabando {
+  position: absolute;
+  top: 0.5em;
+  right: 0.5em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.25em 0.6em;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  animation: parpadeo-grabando 1s infinite;
+}
+
+@keyframes parpadeo-grabando {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+#zona-resultado {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-height: 0;
+  overflow: hidden;
+  z-index: 10;
+}
+
+#video-resultado {
+  width: 100%;
+  max-height: 40vh;
+  display: block;
+}
+
+#video-resultado:not([hidden]),
+#enlace-descarga:not([hidden]) {
+  position: relative;
+}
+
+#zona-resultado:has(#video-resultado:not([hidden])) {
+  max-height: 45vh;
+  background: #000;
+}
+
+#enlace-descarga {
+  display: block;
+  text-align: center;
+  color: #0ff;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 0.5em;
+}
