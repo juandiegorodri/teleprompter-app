@@ -1021,7 +1021,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
   default si el valor guardado no matchea. Con esto queda listo el modelo para que T20 construya la
   UI sobre él.
 
-### ⬜ T20. Pantalla de Ajustes en SwiftUI (calidad, fps, lente, tipografía, opacidad, velocidad) con preview en vivo y aplicación a la sesión
+### ✅ T20. Pantalla de Ajustes en SwiftUI (calidad, fps, lente, tipografía, opacidad, velocidad) con preview en vivo y aplicación a la sesión
 
 - **Alcance**:
   - INCLUYE: una vista `PantallaAjustes` (SwiftUI `Form`/`List`) enlazada a `AjustesStore` con:
@@ -1044,16 +1044,31 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
   `ios/TelepromtCam/Ajustes/PreviewAjustes.swift`, y ajustes menores en `CamaraController` para
   exponer `aplicarCalidad`/`aplicarFPS` de forma segura.
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
-  - [ ] Revisión de código: el cambio de fps valida contra `videoSupportedFrameRateRanges` y NUNCA
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [x] Revisión de código: el cambio de fps valida contra `videoSupportedFrameRateRanges` y NUNCA
     asigna un frame duration fuera de rango (defensa anti-crash explícita); el cambio de preset usa
     `canSetSessionPreset`; ambos dentro de `begin/commitConfiguration` y con `lockForConfiguration`
     donde AVFoundation lo exige.
-  - [ ] Los controles están enlazados a `AjustesStore` y persisten (revisión + build).
-  - [ ] El preview en vivo se anima con su propia velocidad y no toca el estado del teleprompter real.
+  - [x] Los controles están enlazados a `AjustesStore` y persisten (revisión + build).
+  - [x] El preview en vivo se anima con su propia velocidad y no toca el estado del teleprompter real.
   - [ ] Prueba visual (mover sliders y ver el efecto, cambio real de calidad/fps en la imagen):
     **la hace el usuario** (calidad/fps sobre imagen real solo se aprecian en iPhone físico).
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`.
+  Leí `aplicarFPS`/`aplicarCalidadCamara` línea por línea en `CamaraController.swift`: `aplicarFPS`
+  busca primero un rango que CONTENGA el fps pedido (`contains`); si ninguno lo contiene, calcula el
+  clamp más cercano entre TODOS los rangos disponibles ANTES de tocar `lockForConfiguration()` — el
+  valor que finalmente se asigna a `activeVideoMinFrameDuration`/`MaxFrameDuration` siempre viene de
+  ese cálculo defensivo, nunca del valor crudo pedido por el usuario; `lockForConfiguration()` está
+  en un `do/catch` con `defer { unlockForConfiguration() }`, sin camino de crash. `aplicarCalidadCamara`
+  verifica `canSetSessionPreset` ANTES de `beginConfiguration()` — si no es soportado, retorna sin
+  tocar la sesión y expone un mensaje legible vía `errorGrabacion`. Ambos métodos corren en
+  `colaSesion` (no en main), consistente con T17/T18. `PreviewAjustes.swift` usa `TimelineView` con
+  su propio cálculo de offset basado en tiempo — no importa nada de un módulo de teleprompter real
+  (que aún no existe, T21 lo construye después), confirmado por ausencia de imports cruzados. **Nota
+  importante**: el simulador no tiene cámara física — el efecto visual real de cambiar calidad/fps
+  sobre la imagen en vivo queda pendiente de confirmación del usuario en un iPhone real; la lógica
+  de validación anti-crash es sólida por revisión de código pero solo un dispositivo real confirma
+  los rangos reales soportados. Con esto se cierra la Fase 13 (Ajustes y configuración).
 
 ---
 

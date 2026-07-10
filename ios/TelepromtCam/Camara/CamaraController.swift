@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreMedia
 import Foundation
 import Observation
 import UIKit
@@ -286,6 +287,101 @@ final class CamaraController: NSObject {
                 self.session.commitConfiguration()
                 DispatchQueue.main.async {
                     self.errorGrabacion = "No fue posible cambiar de cámara. Se mantiene la cámara actual."
+                }
+            }
+        }
+    }
+
+    // MARK: - Calidad y fps (T20)
+
+    /// Aplica un nuevo `AVCaptureSession.Preset` a la sesión, validando con
+    /// `canSetSessionPreset` ANTES de asignarlo. Si el preset pedido no está
+    /// soportado por el hardware actual, no hace nada y deja el preset
+    /// vigente (nunca crashea por asignar un preset no soportado).
+    func aplicarCalidadCamara(_ calidad: CalidadCamara) {
+        colaSesion.async { [weak self] in
+            guard let self else { return }
+            let preset = calidad.preset
+
+            guard self.session.canSetSessionPreset(preset) else {
+                DispatchQueue.main.async {
+                    self.errorGrabacion = "La calidad \(calidad.label) no está disponible en este dispositivo. Se mantiene la calidad actual."
+                }
+                return
+            }
+
+            self.session.beginConfiguration()
+            self.session.sessionPreset = preset
+            self.session.commitConfiguration()
+
+            DispatchQueue.main.async {
+                self.errorGrabacion = nil
+            }
+        }
+    }
+
+    /// Aplica un nuevo fps al dispositivo de video activo. Busca en
+    /// `activeFormat.videoSupportedFrameRateRanges` si el fps pedido cae
+    /// dentro de algún rango soportado; si es así, lo asigna con
+    /// `CMTime(value:1, timescale:)`. Si NO es soportado, hace clamp al
+    /// extremo (min o max) del rango soportado más cercano en vez de
+    /// asignar un valor inválido — este es el punto clásico de crash de
+    /// AVFoundation (`activeVideoMinFrameDuration` fuera de rango), por eso
+    /// se valida siempre antes de escribir.
+    func aplicarFPS(_ fps: FPS) {
+        colaSesion.async { [weak self] in
+            guard let self else { return }
+            guard let device = self.entradaVideo?.device else { return }
+
+            let fpsPedido = Double(fps.rawValue)
+            let rangos = device.activeFormat.videoSupportedFrameRateRanges
+
+            guard !rangos.isEmpty else {
+                DispatchQueue.main.async {
+                    self.errorGrabacion = "Este dispositivo no reporta rangos de fps soportados."
+                }
+                return
+            }
+
+            // Si el fps pedido cae dentro de algún rango soportado, se usa
+            // tal cual. Si no, se busca el rango más cercano y se hace
+            // clamp al extremo (min o max) de ese rango.
+            var fpsFinal: Double
+            if let rangoQueContiene = rangos.first(where: { ($0.minFrameRate...$0.maxFrameRate).contains(fpsPedido) }) {
+                fpsFinal = fpsPedido
+                _ = rangoQueContiene
+            } else {
+                // Ningún rango contiene el valor pedido: clamp al rango
+                // cuyo extremo esté más cerca del fps pedido.
+                var mejorDistancia = Double.greatestFiniteMagnitude
+                var mejorClamp = fpsPedido
+                for rango in rangos {
+                    let clamp = min(max(fpsPedido, rango.minFrameRate), rango.maxFrameRate)
+                    let distancia = abs(clamp - fpsPedido)
+                    if distancia < mejorDistancia {
+                        mejorDistancia = distancia
+                        mejorClamp = clamp
+                    }
+                }
+                fpsFinal = mejorClamp
+            }
+
+            guard fpsFinal > 0 else { return }
+
+            do {
+                try device.lockForConfiguration()
+                defer { device.unlockForConfiguration() }
+
+                let duracion = CMTime(value: 1, timescale: Int32(fpsFinal))
+                device.activeVideoMinFrameDuration = duracion
+                device.activeVideoMaxFrameDuration = duracion
+
+                DispatchQueue.main.async {
+                    self.errorGrabacion = nil
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorGrabacion = "No fue posible ajustar los fps: \(error.localizedDescription)"
                 }
             }
         }
