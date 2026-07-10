@@ -1124,7 +1124,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 15 — Detección de voz (AVAudioEngine) y enganche a la velocidad
 
-### ⬜ T22. VAD por energía RMS con histéresis (AVAudioEngine) + enganche voz→velocidad del scroll
+### ✅ T22. VAD por energía RMS con histéresis (AVAudioEngine) + enganche voz→velocidad del scroll
 
 - **Alcance**:
   - INCLUYE: en `ios/TelepromtCam/Voz/`, un `VozController` (`@Observable`) que instala un tap
@@ -1154,17 +1154,38 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 - **Archivos**: `ios/TelepromtCam/Voz/VozController.swift`, y el punto de composición
   (`ContentView`/coordinador) que conecta `VozController` con `TeleprompterController`.
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
-  - [ ] Revisión de código: histéresis de dos umbrales aplicada; **el mapeo nivel→factor remapea el
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [x] Revisión de código: histéresis de dos umbrales aplicada; **el mapeo nivel→factor remapea el
     rango realista a [0,1] antes de escalar** (la lección de T14 está implementada, no repetida);
     suavizado presente; factor recortado a [0, máx] sin retroceder; la `AVAudioSession` es compatible
     con grabar video simultáneamente (no roba/rompe el input de la cámara).
-  - [ ] En silencio el factor converge a 0; hablando más fuerte el factor sube dentro del rango
+  - [x] En silencio el factor converge a 0; hablando más fuerte el factor sube dentro del rango
     (verificable por lógica de la fórmula, no por audio real).
   - [ ] Prueba funcional (que el texto siga el ritmo real de la voz, calibración de umbrales):
     **la hace el usuario** en iPhone real (no hay micrófono en este entorno; los valores casi seguro
     necesitarán un ajuste tras la primera prueba).
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`.
+  Leí `VozController.swift` línea por línea, con especial atención en `procesarNivel()` y
+  `remapearNivelAFraccion()` — **confirmado que el remapeo ocurre estrictamente ANTES de la fórmula
+  del factor**: `remapearNivelAFraccion(rms)` se llama primero, y solo su resultado (`fraccionRemapeada`,
+  ya en [0,1]) se usa en `factorMinimoHablando + fraccionRemapeada * (factorMaximoHablando -
+  factorMinimoHablando)` — el `nivel`/`rms` crudo NUNCA se multiplica directo contra el rango del
+  factor. Esta es exactamente la lección crítica bien aplicada, con el comentario en el código
+  citando el bug original de T14 de la web. Histéresis de dos umbrales confirmada como máquina de
+  estados (`if estaHablando { caer bajo salida } else { subir sobre entrada }`) — no hay camino de
+  parpadeo con un solo umbral. Suavizado exponencial presente (`pesoSuavizado=0.15`, mismo valor que
+  la web). Recorte final `max(0, min(factorMaximoHablando, factorSuavizado))` confirmado como última
+  línea antes de `setVelocidad()` — nunca negativo, nunca excede el máximo. `AVAudioSession`
+  configurada con `.playAndRecord`/`.videoRecording`/`.mixWithOthers`, con el razonamiento de
+  coexistencia con `AVCaptureSession` bien documentado en el código (no llama `setActive(false)`
+  mientras la cámara está activa). Reutiliza el permiso de micrófono ya concedido por
+  `CamaraController` en vez de pedirlo de nuevo — buena decisión, evita un segundo prompt redundante.
+  **Nota importante**: sin micrófono real en este entorno, la calibración (umbrales 0.02/0.01,
+  `nivelHablaMaxEsperado`=0.15, rango de factor 0.7-1.8) es una estimación basada en los valores que
+  la web terminó usando tras dos rondas reales — el propio código lo documenta con la misma
+  honestidad que la web. Es muy probable que necesite un tercer ajuste tras la primera prueba del
+  usuario en iPhone real, pero al menos el ERROR DE DISEÑO que causó el bug más grave de la web
+  (T14) no está presente aquí desde el principio. Con esto se cierra la Fase 15 (Detección de voz).
 
 ---
 

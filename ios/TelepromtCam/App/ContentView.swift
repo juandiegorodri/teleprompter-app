@@ -5,11 +5,14 @@ struct ContentView: View {
     @State private var camara = CamaraController()
     @State private var ajustes = AjustesStore()
     @State private var teleprompter: TeleprompterController
+    @State private var voz: VozController
 
     init() {
         let ajustes = AjustesStore()
         _ajustes = State(initialValue: ajustes)
-        _teleprompter = State(initialValue: TeleprompterController(ajustes: ajustes))
+        let teleprompter = TeleprompterController(ajustes: ajustes)
+        _teleprompter = State(initialValue: teleprompter)
+        _voz = State(initialValue: VozController(teleprompter: teleprompter))
     }
 
     var body: some View {
@@ -25,7 +28,16 @@ struct ContentView: View {
                 if camara.sesionActiva {
                     OverlayTeleprompter(ajustes: ajustes, controlador: teleprompter)
                         .padding(.horizontal, 8)
-                        .onAppear { teleprompter.iniciar() }
+                        .onAppear {
+                            teleprompter.iniciar()
+                            // Mismo gesto de usuario que activó la cámara
+                            // (el permiso de micrófono ya se concedió junto
+                            // con el de video en `solicitarPermisosYActivar`)
+                            // — arranca la detección de voz (T22) en cuanto
+                            // la sesión de cámara queda activa.
+                            voz.iniciar()
+                        }
+                        .onDisappear { voz.detener() }
                 }
 
                 Spacer()
