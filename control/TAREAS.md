@@ -820,7 +820,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 11 — Scaffold del proyecto Xcode (build verde desde aquí)
 
-### ⬜ T16. Scaffold del proyecto Xcode: estructura, Info.plist, permisos, app mínima que compila
+### ✅ T16. Scaffold del proyecto Xcode: estructura, Info.plist, permisos, app mínima que compila
 
 - **Alcance**:
   - INCLUYE:
@@ -853,21 +853,32 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
   compartido), `TelepromtCam/App/TelepromtCamApp.swift`, `TelepromtCam/App/Info.plist`,
   `TelepromtCam/App/Assets.xcassets/`, `ios/.gitignore`.
 - **Definición de Hecho**:
-  - [ ] `xcodebuild -project ios/TelepromtCam.xcodeproj -scheme TelepromtCam -sdk iphonesimulator
+  - [x] `xcodebuild -project ios/TelepromtCam.xcodeproj -scheme TelepromtCam -sdk iphonesimulator
     -destination 'generic/platform=iOS Simulator' build` termina en `** BUILD SUCCEEDED **` con 0
     errores (log adjunto en la evidencia).
-  - [ ] `Info.plist` contiene las 3 claves de privacidad (`NSCameraUsageDescription`,
+  - [x] `Info.plist` contiene las 3 claves de privacidad (`NSCameraUsageDescription`,
     `NSMicrophoneUsageDescription`, `NSPhotoLibraryAddUsageDescription`) con textos legibles en
     español (verificable con `plutil -p` o lectura directa).
-  - [ ] El bundle id efectivo del build es `com.juandiegorodri.teleprompter` y el display name
+  - [x] El bundle id efectivo del build es `com.juandiegorodri.teleprompter` y el display name
     `TelepromtCam` (verificable con `xcodebuild -showBuildSettings | grep -E 'PRODUCT_BUNDLE_IDENTIFIER|PRODUCT_NAME|IPHONEOS_DEPLOYMENT_TARGET'`).
-  - [ ] Agregar un `.swift` nuevo dentro de `ios/TelepromtCam/` y recompilar lo incluye SIN editar el
+  - [x] Agregar un `.swift` nuevo dentro de `ios/TelepromtCam/` y recompilar lo incluye SIN editar el
     pbxproj (prueba de que el grupo sincronizado funciona — el verificador crea un archivo temporal
     trivial, confirma que compila incluido, y lo borra).
-  - [ ] (Opcional recomendado) smoke-launch headless: `simctl` bootea el simulador, instala el `.app`
+  - [x] (Opcional recomendado) smoke-launch headless: `simctl` bootea el simulador, instala el `.app`
     y lo lanza sin crash de arranque (evidencia: el proceso queda vivo / no hay crash log).
   - [ ] Prueba visual final (abrir en Xcode, correr en simulador GUI): **la hace el usuario**.
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado independientemente (no solo confiando en el reporte
+  del constructor): corrí `xcodebuild` de nuevo y confirmé `** BUILD SUCCEEDED **`; agregué yo mismo
+  un `.swift` temporal (`enum VerifTemp {}`) dentro de `ios/TelepromtCam/Comun/`, recompilé sin tocar
+  el pbxproj, compiló bien, lo borré — el grupo sincronizado funciona de verdad, no es solo lo que
+  reportó el agente. `plutil -p` sobre el `Info.plist` del `.app` construido confirma las 3 claves de
+  privacidad con el texto exacto esperado. El pbxproj usa el formato moderno (`objectVersion=77`,
+  `PBXFileSystemSynchronizedRootGroup`) — decisión acertada del constructor, evita fragilidad en
+  todas las tareas siguientes que agreguen archivos Swift. Info.plist generado vía
+  `GENERATE_INFOPLIST_FILE=YES` + `INFOPLIST_KEY_*` (sin archivo físico) — razonable y documentado.
+  Smoke-launch en simulador confirmado por el constructor (proceso vivo tras `simctl launch`).
+  **Pendiente explícito**: la prueba visual en Xcode/simulador GUI la debe hacer el usuario — este
+  entorno solo puede confirmar que compila y arranca sin crash inmediato, no cómo se ve.
 
 ---
 
