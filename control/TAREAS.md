@@ -1191,7 +1191,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 16 — Editor del guion
 
-### ⬜ T23. Editor de guion con persistencia
+### ✅ T23. Editor de guion con persistencia
 
 - **Alcance**:
   - INCLUYE: en `ios/TelepromtCam/Editor/`, una vista `PantallaEditor` con un `TextEditor` de SwiftUI
@@ -1204,13 +1204,25 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 - **Archivos**: `ios/TelepromtCam/Editor/PantallaEditor.swift`,
   `ios/TelepromtCam/Editor/GuionStore.swift` (persistencia), integración con `TeleprompterController`.
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
-  - [ ] Revisión de código: guardar persiste bajo clave estable y sobrescribe (no acumula copias);
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [x] Revisión de código: guardar persiste bajo clave estable y sobrescribe (no acumula copias);
     carga al abrir; primer uso cae a un guion de ejemplo sin crash; guardar actualiza el texto del
     teleprompter.
   - [ ] Prueba visual (escribir, guardar, reabrir y ver el guion; que el teleprompter lo muestre):
     **la hace el usuario** (persistencia y flujo verificables en simulador GUI por el usuario).
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`.
+  `GuionStore.swift` confirmado: clave estable `editor.guion` vía enum privado (mismo patrón que
+  `AjustesStore` de T19), `guardar()` hace `set(_:forKey:)` simple — sobrescribe, no acumula.
+  `ContentView.init()` decide el guion inicial con `if let` sobre `GuionStore().cargar()`, sin
+  forzar unwrap — primer uso (nil) cae al `guionDeEjemplo` de T21 sin riesgo de crash. `PantallaEditor`
+  guarda y además asigna `teleprompter.texto = textoEditado`, reusando el `didSet` de T21 que ya
+  reinicia el scroll — sin duplicar esa lógica. Decisión razonable de agregar un botón mínimo
+  "Editar guion" + `.sheet` en ContentView para que el editor sea alcanzable, documentando
+  explícitamente que T24 reestructurará esos controles secundarios (habilitación condicionada a
+  cámara activa, igual que T12 de la web) — evita que T23 quede huérfano de UI sin invadir el
+  alcance de T24. **Nota importante**: sin GUI interactiva en este entorno, escribir/guardar/
+  reabrir y confirmar que el teleprompter muestra el guion nuevo queda pendiente de la prueba
+  visual del usuario. Con esto se cierra la Fase 16 (Editor).
 
 ---
 

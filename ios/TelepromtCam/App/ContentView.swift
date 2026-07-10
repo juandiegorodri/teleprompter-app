@@ -6,11 +6,24 @@ struct ContentView: View {
     @State private var ajustes = AjustesStore()
     @State private var teleprompter: TeleprompterController
     @State private var voz: VozController
+    private let guionStore = GuionStore()
+
+    @State private var mostrandoEditor = false
 
     init() {
         let ajustes = AjustesStore()
         _ajustes = State(initialValue: ajustes)
-        let teleprompter = TeleprompterController(ajustes: ajustes)
+        // Punto de composición del guion inicial (T23): si hay uno guardado
+        // en `GuionStore` (el usuario ya guardó antes en el editor), se usa
+        // ese; si no (primer uso — `cargar()` devuelve `nil`), se cae al
+        // guion de ejemplo sin crashear, usando el default del
+        // inicializador de `TeleprompterController`.
+        let teleprompter: TeleprompterController
+        if let guionGuardado = GuionStore().cargar() {
+            teleprompter = TeleprompterController(ajustes: ajustes, texto: guionGuardado)
+        } else {
+            teleprompter = TeleprompterController(ajustes: ajustes)
+        }
         _teleprompter = State(initialValue: teleprompter)
         _voz = State(initialValue: VozController(teleprompter: teleprompter))
     }
@@ -63,7 +76,21 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .padding(.bottom, 40)
+
+                    // Acceso al editor de guion (T23). La deshabilitación de
+                    // controles secundarios hasta que la cámara esté activa
+                    // (mencionada en T24) se resuelve ahí; por ahora este es
+                    // el único punto de entrada a `PantallaEditor`.
+                    Button("Editar guion") {
+                        mostrandoEditor = true
+                    }
+                    .padding(.bottom, 24)
                 }
+            }
+        }
+        .sheet(isPresented: $mostrandoEditor) {
+            PantallaEditor(teleprompter: teleprompter, guionStore: guionStore) {
+                mostrandoEditor = false
             }
         }
     }

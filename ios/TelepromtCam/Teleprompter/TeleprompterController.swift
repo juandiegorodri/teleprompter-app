@@ -1,9 +1,11 @@
 import Foundation
 import Observation
 
-/// Guion de ejemplo hardcodeado hasta que T23 agregue el editor con
-/// persistencia real y sobreescriba `texto`.
-private let guionDeEjemplo = """
+/// Guion de ejemplo usado cuando el usuario no ha guardado ninguno todavía
+/// (`GuionStore.cargar()` devuelve `nil`, primer uso — T23). Expuesto
+/// (no `private`) para que el punto de composición de la app y
+/// `PantallaEditor` puedan usarlo como fallback sin duplicarlo.
+let guionDeEjemplo = """
 Bienvenido a TelepromtCam.
 
 Este es un guion de ejemplo para probar el desplazamiento automático \
