@@ -1,6 +1,10 @@
 console.log("cargado: teleprompter");
 
-const GUION_EJEMPLO = `Bienvenidos a este teleprompter de ejemplo. Este es el primer párrafo de un guion pensado para probar que el bloque de texto sea claramente más alto que la pantalla disponible, de modo que exista contenido suficiente para desplazar en las fases siguientes del proyecto.
+/**
+ * Guion de ejemplo usado como contenido inicial cuando no hay nada guardado
+ * en localStorage. Lo consume editor.js (T6) para decidir qué montar al arrancar.
+ */
+export const GUION_EJEMPLO = `Bienvenidos a este teleprompter de ejemplo. Este es el primer párrafo de un guion pensado para probar que el bloque de texto sea claramente más alto que la pantalla disponible, de modo que exista contenido suficiente para desplazar en las fases siguientes del proyecto.
 
 El objetivo de esta pantalla es mostrar el texto con buena legibilidad sobre la imagen en vivo de la cámara, usando un fondo translúcido que no tape del todo el video mientras mantiene un contraste alto para la tipografía.
 
@@ -171,5 +175,8 @@ function inicializarControles() {
   }
 }
 
-montarTexto(GUION_EJEMPLO);
 inicializarControles();
+
+// El montaje del texto inicial (guion de ejemplo o guardado) lo decide y
+// ejecuta editor.js (T6) al arrancar, para no acoplar teleprompter.js a
+// localStorage ni duplicar la decisión de qué texto mostrar primero.
