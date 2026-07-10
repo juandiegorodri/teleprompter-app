@@ -929,7 +929,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
   el prompt del sistema, ver el preview en vivo, y el camino de denegar permiso (mensaje + botón a
   Ajustes).
 
-### ⬜ T18. Selección de lente frontal/trasera + grabación con AVCaptureMovieFileOutput
+### ✅ T18. Selección de lente frontal/trasera + grabación con AVCaptureMovieFileOutput
 
 - **Alcance**:
   - INCLUYE: agregar a `CamaraController` un `AVCaptureMovieFileOutput` a la sesión; métodos
@@ -951,16 +951,28 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 - **Archivos**: `ios/TelepromtCam/Camara/CamaraController.swift` (+ posible
   `ios/TelepromtCam/Camara/GrabacionDelegate.swift` si se separa el delegate).
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
-  - [ ] Revisión de código: `cambiarLente` usa `beginConfiguration/commitConfiguration`, remueve el
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [x] Revisión de código: `cambiarLente` usa `beginConfiguration/commitConfiguration`, remueve el
     input viejo antes de agregar el nuevo, y ante fallo restaura el input anterior (sin dejar la
     sesión sin cámara); `iniciarGrabacion`/`detenerGrabacion` son idempotentes respecto al estado
     (`estaGrabando`) y el delegate entrega URL/errores.
-  - [ ] Grabar → detener → grabar de nuevo es posible sin reconfigurar toda la sesión (verificable
+  - [x] Grabar → detener → grabar de nuevo es posible sin reconfigurar toda la sesión (verificable
     por lógica de estado en el código).
   - [ ] Prueba visual/funcional (grabar un clip real, cambiar de lente y ver el cambio):
     **la hace el usuario** en iPhone real (el simulador no tiene cámara).
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`.
+  Confirmado por grep y lectura de `CamaraController.swift`: `cambiarLente(a:)` hace
+  `removeInput(entradaAnterior)` ANTES de `addInput(entradaNueva)`, y si `canAddInput` falla para la
+  nueva, reintenta `addInput(entradaAnterior)` para no dejar la sesión sin video — patrón defensivo
+  correcto. `iniciarGrabacion()`/`detenerGrabacion()` usan `guard !movieFileOutput.isRecording` /
+  `guard movieFileOutput.isRecording` respectivamente, así que llamadas repetidas no rompen el
+  estado. El `AVCaptureMovieFileOutput` se agrega una sola vez en `configurarSesion()` — grabar
+  varias veces reutiliza el mismo output, sin reconfigurar la sesión completa. `isIdleTimerDisabled`
+  usado como buena práctica (no como mitigación de un bug, comentario explícito distinguiendo esto
+  del hack de timeslice+WakeLock de la web, tal como pedía la lección anotada). **Nota importante**:
+  el simulador no tiene cámara física — grabar un clip real, reproducirlo, y cambiar de lente en
+  vivo quedan pendientes de confirmación por el usuario en un iPhone real. Con esto se cierra la
+  Fase 12 (Cámara nativa).
 
 ---
 
