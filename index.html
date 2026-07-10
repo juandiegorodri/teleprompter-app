@@ -24,14 +24,22 @@
     </div>
   </div>
   <div id="zona-controles">
-    <button id="btn-activar-camara" type="button">Activar cámara</button>
-    <button id="btn-grabar" type="button" disabled>Grabar</button>
-    <button id="btn-play-pausa" type="button">Play</button>
-    <button id="btn-reiniciar" type="button">Reiniciar</button>
-    <button id="btn-alternar-editor" type="button">Editar guion</button>
-    <button id="btn-activar-voz" type="button">Activar detección de voz</button>
-    <button id="btn-modo-voz" type="button" aria-pressed="false">Modo voz: OFF</button>
-    <button id="btn-alternar-ajustes" type="button">Ajustes</button>
+    <!-- T12, punto 1: dos botones grandes y prominentes que se turnan en el
+         mismo lugar — "Activar cámara" se oculta y "Grabar" aparece en su
+         lugar tras el primer gesto de usuario exitoso (getUserMedia). Los
+         demás controles arrancan disabled y solo se habilitan cuando
+         getUserMedia resuelve con éxito (ver js/camara.js). -->
+    <button id="btn-activar-camara" type="button" class="boton-principal">Activar cámara</button>
+    <button id="btn-grabar" type="button" class="boton-principal" hidden>Grabar</button>
+    <button id="btn-alternar-config" type="button" disabled>⚙ Configuración</button>
+  </div>
+
+  <div id="panel-config" hidden>
+    <button id="btn-modo-voz" type="button" aria-pressed="true" disabled>Modo voz: ON</button>
+    <button id="btn-play-pausa" type="button" disabled>Play</button>
+    <button id="btn-reiniciar" type="button" disabled>Reiniciar</button>
+    <button id="btn-alternar-editor" type="button" disabled>Editar guion</button>
+    <button id="btn-alternar-ajustes" type="button" disabled>Ajustes</button>
   </div>
 
   <div id="zona-voz">

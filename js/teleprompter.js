@@ -48,8 +48,11 @@ export function montarTexto(texto) {
 
 // --- Scroll automático (T5) --------------------------------------------
 
-/** Velocidad base en píxeles por segundo. Multiplicada por el factor de setVelocidad(). */
-const VELOCIDAD_BASE_PX_S = 40;
+/** Velocidad base en píxeles por segundo. Multiplicada por el factor de setVelocidad().
+ * T12, punto 7: reducida de 40 a 24 (junto con el rango de FACTOR_*_HABLANDO en
+ * voz.js, ahora 0.4-1.8) para que el avance por defecto sea notablemente más
+ * lento y legible, dado que el modo voz ahora está activo desde el arranque. */
+const VELOCIDAD_BASE_PX_S = 24;
 
 let factorVelocidad = 1;
 let posicionActualPx = 0;

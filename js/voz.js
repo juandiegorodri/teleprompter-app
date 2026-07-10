@@ -4,8 +4,7 @@ console.log("cargado: voz");
 // Expone estaHablando() y nivelActual() para que T8 los use al enganchar la velocidad del teleprompter.
 // NO acopla con teleprompter.js (eso es T8) ni reconoce palabras: solo mide energía de audio.
 
-import { obtenerStream } from "./camara.js";
-import { setVelocidad, iniciarScroll, pausarScroll } from "./teleprompter.js";
+import { setVelocidad } from "./teleprompter.js";
 
 // --- Umbrales de histéresis (ajustables) ---
 // Se comparan contra el nivel RMS normalizado (0-1). UMBRAL_ENTRAR > UMBRAL_SALIR
@@ -22,13 +21,19 @@ const UMBRAL_SALIR_HABLA = 0.03;
 // en un solo lugar. teleprompter.js no necesita saber nada de voz.js (bajo acoplamiento).
 
 // Rango del factor de velocidad cuando se está hablando (1 = velocidad base de T5).
-const FACTOR_MINIMO_HABLANDO = 0.5;
-const FACTOR_MAXIMO_HABLANDO = 2.5;
+// T12, punto 7: rango reducido (antes 0.5-2.5) para que el avance por voz sea
+// más lento y legible por defecto, ahora que el modo voz está activo desde
+// el arranque (ya no hace falta que el usuario lo active a mano).
+const FACTOR_MINIMO_HABLANDO = 0.4;
+const FACTOR_MAXIMO_HABLANDO = 1.8;
 // Peso de la interpolación exponencial por paso (0-1): más alto = reacciona más rápido
 // pero con más saltos; más bajo = más suave pero más lento para responder.
 const SUAVIZADO = 0.15;
 
-let modoVozActivo = false;
+// T12, punto 3: el modo voz arranca activado por defecto — ya no requiere que
+// el usuario lo active a mano (el toggle en el panel de configuración solo
+// permite desactivarlo/reactivarlo).
+let modoVozActivo = true;
 let factorSuavizado = 0;
 
 let audioContext = null;
@@ -40,7 +45,6 @@ let rafId = null;
 let hablando = false;
 let nivel = 0;
 
-const btnActivarVoz = document.getElementById("btn-activar-voz");
 const mensajeVoz = document.getElementById("mensaje-voz");
 const barraNivelVoz = document.getElementById("barra-nivel-voz");
 const indicadorEstadoVoz = document.getElementById("indicador-estado-voz");
@@ -129,10 +133,17 @@ function aplicarEngancheVelocidad() {
   setVelocidad(factorFinal);
 }
 
-async function activarDeteccionVoz() {
+/**
+ * T12, punto 3: inicializa el AudioContext/AnalyserNode de detección de voz.
+ * Se exporta para que camara.js la llame dentro del mismo handler de click de
+ * "Activar cámara", justo después de obtener el stream con éxito — sigue
+ * siendo el mismo gesto de usuario que requiere iOS para poder resumir el
+ * AudioContext, así que ya no hace falta un botón #btn-activar-voz aparte.
+ * @param {MediaStream} stream - El stream ya obtenido por getUserMedia en camara.js.
+ */
+export async function inicializarAudioContext(stream) {
   ocultarMensaje();
 
-  const stream = obtenerStream();
   if (!stream) {
     mostrarMensaje("Activa la cámara primero para poder detectar la voz.");
     return;
@@ -169,11 +180,6 @@ async function activarDeteccionVoz() {
     fuenteAudio.connect(analyser);
     // Nota: no se conecta analyser -> audioContext.destination para no generar eco/feedback de audio.
 
-    if (btnActivarVoz) {
-      btnActivarVoz.textContent = "Detección de voz activa";
-      btnActivarVoz.disabled = true;
-    }
-
     if (rafId === null) {
       loopDeteccion();
     }
@@ -183,18 +189,15 @@ async function activarDeteccionVoz() {
   }
 }
 
-if (btnActivarVoz) {
-  btnActivarVoz.addEventListener("click", activarDeteccionVoz);
-} else {
-  console.error("No se encontró el botón #btn-activar-voz");
-}
-
-// --- Toggle "Modo voz" (T8) ---
-// ON: el enganche de voz controla la velocidad (arranca el scroll si no corría) y
-// los controles manuales Play/Pausa/Reiniciar de T5 quedan secundarios (siguen
-// funcionando, pero cada paso del loop de voz vuelve a imponer su factor).
-// OFF: se detiene el enganche (deja de llamar a setVelocidad) y el scroll queda
-// bajo control manual normal, tal como en T5.
+// --- Toggle "Modo voz" (T8, ajustado en T12) ---
+// ON (valor por defecto desde T12): el enganche de voz controla la velocidad
+// mientras el scroll esté corriendo (arrancado/pausado ahora por Grabar/Detener
+// en camara.js, o manualmente por Play/Pausa/Reiniciar de T5).
+// OFF: se detiene el enganche (deja de llamar a setVelocidad); el scroll queda
+// bajo control manual normal.
+// T12, punto 4: este toggle SOLO cambia modoVozActivo — nunca arranca ni para
+// el scroll (eso ahora lo controla exclusivamente Grabar/Detener en camara.js,
+// o Play/Pausa/Reiniciar manualmente).
 const btnModoVoz = document.getElementById("btn-modo-voz");
 
 function actualizarEtiquetaModoVoz() {
@@ -206,15 +209,11 @@ function actualizarEtiquetaModoVoz() {
 function activarModoVoz() {
   modoVozActivo = true;
   factorSuavizado = 0;
-  iniciarScroll();
   actualizarEtiquetaModoVoz();
 }
 
 function desactivarModoVoz() {
   modoVozActivo = false;
-  // Al soltar el control por voz se pausa el scroll; el usuario retoma con
-  // Play/Pausa/Reiniciar (T5), que siguen funcionando igual.
-  pausarScroll();
   actualizarEtiquetaModoVoz();
 }
 

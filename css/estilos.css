@@ -68,6 +68,9 @@ html, body {
 }
 
 #zona-texto {
+  /* T12, punto 8: top coincide exactamente con la altura de #zona-camara (mismo
+     cálculo * 0.85%), así que no hay margin/padding entre ambas zonas que las
+     separe — quedan apiladas sin espacio extra. */
   position: absolute;
   top: calc(var(--tp-proporcion-camara) * 0.85%);
   left: 0;
@@ -124,9 +127,52 @@ html, body {
   padding-right: calc(0.5em + env(safe-area-inset-right, 0px));
 }
 
-#btn-grabar:disabled {
+#btn-grabar:disabled,
+button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* T12, punto 1: botón principal grande y prominente (Activar cámara / Grabar). */
+.boton-principal {
+  flex: 1;
+  padding: 0.85em;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  background: #0ff;
+  color: #000;
+}
+
+#btn-grabar.boton-principal {
+  background: #ff3b3b;
+  color: #fff;
+}
+
+/* T12, punto 6: panel secundario (Modo voz/Play-Pausa/Reiniciar/Editar guion/
+   Ajustes) oculto por defecto, reusando el patrón de panel de T6/T9. */
+#panel-config {
+  position: absolute;
+  bottom: calc(15% + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  width: 100%;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  padding: 0.75em;
+  background: rgba(17, 17, 17, 0.95);
+  border-top: 2px solid #f0f;
+}
+
+#panel-config[hidden] {
+  display: none;
+}
+
+#panel-config button {
+  flex: 1 1 auto;
+  padding: 0.6em;
 }
 
 #indicador-grabando {

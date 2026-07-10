@@ -1,5 +1,13 @@
 console.log("cargado: camara");
 
+// T12: flujo simplificado — activar cámara habilita TODO en un solo gesto de
+// usuario (getUserMedia). Se importa inicializarAudioContext() de voz.js para
+// crear el AudioContext/AnalyserNode aquí mismo (el mismo gesto de click es
+// obligatorio en iOS para poder resumir el AudioContext) e iniciarScroll/
+// pausarScroll de teleprompter.js para que grabar controle el desplazamiento.
+import { inicializarAudioContext } from "./voz.js";
+import { iniciarScroll, pausarScroll } from "./teleprompter.js";
+
 // Referencia al MediaStream activo, accesible para otros módulos (grabación en T3, análisis de audio en Fase 4).
 let streamActual = null;
 
@@ -17,6 +25,17 @@ const btnGrabar = document.getElementById("btn-grabar");
 const indicadorGrabando = document.getElementById("indicador-grabando");
 const videoResultado = document.getElementById("video-resultado");
 const enlaceDescarga = document.getElementById("enlace-descarga");
+const btnAlternarConfig = document.getElementById("btn-alternar-config");
+// T12: todos los controles secundarios (agrupados en #panel-config) arrancan
+// disabled en el HTML y se habilitan aquí, una vez que getUserMedia resuelve.
+const IDS_CONTROLES_SECUNDARIOS = [
+  "btn-alternar-config",
+  "btn-modo-voz",
+  "btn-play-pausa",
+  "btn-reiniciar",
+  "btn-alternar-editor",
+  "btn-alternar-ajustes",
+];
 
 let mediaRecorder = null;
 let chunksGrabacion = [];
@@ -80,9 +99,27 @@ async function activarCamara() {
     if (videoCamara) {
       videoCamara.srcObject = stream;
     }
+
+    // T12, punto 1: el botón "Activar cámara" se oculta y aparece "Grabar" en
+    // su lugar (mismo gesto de usuario, ahora dedicado a grabar/detener).
+    if (btnActivarCamara) {
+      btnActivarCamara.hidden = true;
+    }
     if (btnGrabar) {
+      btnGrabar.hidden = false;
       btnGrabar.disabled = false;
     }
+
+    // T12, punto 2: habilita todos los controles secundarios ahora que la
+    // cámara (y el micrófono) están disponibles.
+    for (const id of IDS_CONTROLES_SECUNDARIOS) {
+      const boton = document.getElementById(id);
+      if (boton) boton.disabled = false;
+    }
+
+    // T12, punto 3: mismo gesto de usuario -> inicializa aquí el AudioContext/
+    // AnalyserNode de detección de voz (ya no existe #btn-activar-voz).
+    inicializarAudioContext(stream);
   } catch (error) {
     console.error("Error al acceder a la cámara/micrófono:", error);
     let texto = "No se pudo acceder a la cámara. Revisa los permisos e inténtalo de nuevo.";
@@ -147,6 +184,9 @@ function iniciarGrabacion() {
     grabando = false;
     actualizarUiGrabacion();
     chunksGrabacion = [];
+
+    // T12, punto 5: al detener la grabación se pausa el scroll del teleprompter.
+    pausarScroll();
   });
 
   mediaRecorder.addEventListener("error", (evento) => {
@@ -154,11 +194,16 @@ function iniciarGrabacion() {
     mostrarMensaje("Ocurrió un error durante la grabación.");
     grabando = false;
     actualizarUiGrabacion();
+    pausarScroll();
   });
 
   mediaRecorder.start();
   grabando = true;
   actualizarUiGrabacion();
+
+  // T12, punto 5: grabar controla el teleprompter — arranca el scroll junto
+  // con la grabación.
+  iniciarScroll();
 }
 
 function detenerGrabacion() {
@@ -194,4 +239,19 @@ if (btnGrabar) {
   btnGrabar.addEventListener("click", alternarGrabacion);
 } else {
   console.error("No se encontró el botón #btn-grabar");
+}
+
+// T12, punto 6: agrupa Modo voz/Play-Pausa/Reiniciar/Editar guion/Ajustes en un
+// panel secundario oculto por defecto, reusando el patrón de panel de T6/T9.
+const panelConfig = document.getElementById("panel-config");
+
+function alternarPanelConfig() {
+  if (!panelConfig) return;
+  panelConfig.hidden = !panelConfig.hidden;
+}
+
+if (btnAlternarConfig) {
+  btnAlternarConfig.addEventListener("click", alternarPanelConfig);
+} else {
+  console.error("No se encontró el botón #btn-alternar-config");
 }

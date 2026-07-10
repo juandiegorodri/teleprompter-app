@@ -440,7 +440,7 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 
 ## Fase 7 — Ajustes de flujo de uso (feedback de prueba real en iPhone)
 
-### ⬜ T12. Flujo simplificado: cámara habilita todo, grabar controla el teleprompter, voz por defecto
+### ✅ T12. Flujo simplificado: cámara habilita todo, grabar controla el teleprompter, voz por defecto
 
 - **Alcance**:
   - INCLUYE:
@@ -478,20 +478,52 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
     fase de diseño posterior; queda anotado en Ideas/futuro, no se toca aquí.
 - **Archivos**: `js/camara.js`, `js/voz.js`, `js/teleprompter.js`, `index.html`, `css/estilos.css`.
 - **Definición de Hecho**:
-  - [ ] Al cargar la app (cámara sin activar), todos los controles secundarios están visiblemente
-    deshabilitados; solo el botón grande "Activar cámara" es interactivo.
-  - [ ] Al tocar "Activar cámara" y conceder permiso, en el mismo flujo se habilitan todos los
+  - [x] Al cargar la app (cámara sin activar), todos los controles secundarios están visiblemente
+    deshabilitados; solo el botón grande "Activar cámara" es interactivo. (Los 6 controles del
+    panel de configuración tienen `disabled` en el HTML: confirmado por grep — 7 apariciones de
+    `disabled` en total, incluye `#btn-alternar-config` y los 5 dentro de `#panel-config`.)
+  - [x] Al tocar "Activar cámara" y conceder permiso, en el mismo flujo se habilitan todos los
     controles secundarios Y se activa la detección de voz (sin un botón adicional) Y el botón
-    grande cambia a "Grabar".
-  - [ ] El teleprompter no se mueve ni un píxel hasta tocar "Grabar" — activar cámara, activar/
-    desactivar Modo voz, o cualquier otra interacción previa no debe iniciar el scroll.
-  - [ ] Tocar "Grabar" inicia la grabación Y el scroll simultáneamente; con Modo voz ON (default),
-    el avance sigue el ritmo de la voz; tocar "Detener" para ambos a la vez.
-  - [ ] Con Modo voz ON por defecto, hablar más lento que antes resulta en un avance perceptiblemente
-    más lento que el comportamiento previo a este ajuste (velocidad base reducida).
-  - [ ] Modo voz, Play/Pausa, Reiniciar, editor y ajustes están agrupados en un menú/panel
-    secundario, separados visualmente del botón grande de grabar.
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+    grande cambia a "Grabar". (`activarCamara()` en camara.js: tras `getUserMedia` exitoso, oculta
+    `#btn-activar-camara`, muestra/habilita `#btn-grabar`, habilita los 6 IDs de
+    `IDS_CONTROLES_SECUNDARIOS`, y llama `inicializarAudioContext(stream)` importado de voz.js —
+    todo en el mismo handler, mismo gesto de usuario. `#btn-activar-voz` fue eliminado por completo
+    del HTML y del JS, confirmado por grep.)
+  - [x] El teleprompter no se mueve ni un píxel hasta tocar "Grabar" — activar cámara, activar/
+    desactivar Modo voz, o cualquier otra interacción previa no debe iniciar el scroll. (Confirmado
+    por lectura de voz.js: `activarModoVoz()`/`desactivarModoVoz()` ya NO llaman
+    `iniciarScroll()`/`pausarScroll()` — solo togglean `modoVozActivo`. `inicializarAudioContext()`
+    tampoco toca el scroll. La única llamada a `iniciarScroll()` en todo el código está dentro de
+    `iniciarGrabacion()` en camara.js.)
+  - [x] Tocar "Grabar" inicia la grabación Y el scroll simultáneamente; con Modo voz ON (default),
+    el avance sigue el ritmo de la voz; tocar "Detener" para ambos a la vez. (`iniciarGrabacion()`
+    llama `mediaRecorder.start()` seguido de `iniciarScroll()`; el evento `stop` del MediaRecorder
+    y el handler de `error` llaman `pausarScroll()`. Con `modoVozActivo` en `true` por defecto, el
+    loop de detección de voz —que ya corre desde que se inicializó el AudioContext— sigue aplicando
+    `aplicarEngancheVelocidad()` en cada frame, así que el scroll recién arrancado queda controlado
+    por voz de inmediato.)
+  - [x] Con Modo voz ON por defecto, hablar más lento que antes resulta en un avance perceptiblemente
+    más lento que el comportamiento previo a este ajuste (velocidad base reducida). `VELOCIDAD_BASE_PX_S`
+    bajó de 40 a 24 (40% más lento) en teleprompter.js; el rango de factor por voz en voz.js bajó de
+    [0.5, 2.5] a [0.4, 1.8] — combinado, el avance máximo por voz baja de 100px/s a 43.2px/s
+    (-57%), y el mínimo de 20px/s a 9.6px/s. Cambio sustancial y en la dirección correcta.
+  - [x] Modo voz, Play/Pausa, Reiniciar, editor y ajustes están agrupados en un menú/panel
+    secundario, separados visualmente del botón grande de grabar. (`#panel-config` agrupa
+    `#btn-modo-voz`, `#btn-play-pausa`, `#btn-reiniciar`, `#btn-alternar-editor`,
+    `#btn-alternar-ajustes`; se abre/cierra con `#btn-alternar-config` — separado de
+    `#btn-activar-camara`/`#btn-grabar` en `#zona-controles`.)
+- **Evidencia del verificador**: Revisión de código línea por línea de los 5 archivos tocados
+  (camara.js, voz.js, teleprompter.js, index.html, css/estilos.css). Sintaxis validada
+  (`node --check` en los 3 JS, sin errores). `#btn-activar-voz` confirmado eliminado sin residuos
+  (solo quedan comentarios que documentan su eliminación). Los 6 controles secundarios confirmados
+  `disabled` por defecto vía grep. Assets sirven 200 en el servidor de :8080 (index.html,
+  css/estilos.css, camara.js, voz.js, teleprompter.js). Sin gap/margin extra entre `#zona-camara` y
+  `#zona-texto` (ya tileaban exactamente vía `calc()` desde T10, se dejó un comentario confirmándolo
+  — la cercanía real al lente físico de la cámara sigue pendiente para la fase de diseño). **Nota
+  importante**: mismo límite que el resto de tareas de esta sesión — no hay cámara/mic/AudioContext
+  reales en este entorno, así que el flujo completo (gesto real, permisos, arranque de grabación +
+  scroll simultáneo, sensación real de la nueva velocidad) NO se pudo probar en vivo. El usuario
+  debe confirmarlo en su iPhone (mismo link de GitHub Pages) antes de dar T12 por cerrada del todo.
 
 ---
 
