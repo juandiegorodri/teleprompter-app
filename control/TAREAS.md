@@ -532,7 +532,7 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 *Pedida por el usuario tras dos rondas de prueba real en iPhone. Cubre lo que en T12 se dejó
 anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirmó que la quiere ya.*
 
-### ⬜ T13. Texto superpuesto arriba de la cámara + panel de ajustes con preview en vivo + velocidad y lente configurables
+### ✅ T13. Texto superpuesto arriba de la cámara + panel de ajustes con preview en vivo + velocidad y lente configurables
 
 - **Alcance**:
   - INCLUYE:
@@ -573,23 +573,51 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 - **Archivos**: `index.html`, `css/estilos.css`, `js/teleprompter.js`, `js/ajustes.js`,
   `js/camara.js`.
 - **Definición de Hecho**:
-  - [ ] El texto del teleprompter se ve superpuesto sobre la parte superior de la imagen de cámara
+  - [x] El texto del teleprompter se ve superpuesto sobre la parte superior de la imagen de cámara
     (no en una franja separada debajo), legible con el fondo/color configurados, sin tapar los
-    botones de `#zona-controles` ni el panel de configuración.
-  - [ ] En el panel de ajustes, mover cada slider (tamaño, color, opacidad, velocidad) actualiza un
+    botones de `#zona-controles` ni el panel de configuración. (`#zona-texto` con `position:absolute;
+    top:0; z-index:5` sobre `#zona-camara` que ahora ocupa `height:85%`; fondo translúcido de T9
+    intacto para legibilidad sobre el video.)
+  - [x] En el panel de ajustes, mover cada slider (tamaño, color, opacidad, velocidad) actualiza un
     texto de muestra visible dentro del propio panel en tiempo real, incluida una animación de
     scroll a la velocidad configurada — sin tener que cerrar el panel ni grabar para verlo.
-  - [ ] Cambiar el slider de velocidad cambia la velocidad real del teleprompter la próxima vez que
+    (`#preview-ajustes-contenedor`/`#preview-ajustes-texto` con rAF propio y aislado en ajustes.js
+    — `previewPaso`/`previewIniciar`/`previewDetener`/`previewSetVelocidad` — que arranca/para con
+    el panel y no toca el estado del teleprompter real.)
+  - [x] Cambiar el slider de velocidad cambia la velocidad real del teleprompter la próxima vez que
     se grabe (o inmediatamente si ya está corriendo), y esa velocidad persiste tras recargar.
-  - [ ] La velocidad configurada por el usuario sigue combinándose correctamente con el control por
+    (`setVelocidadBase()` exportada de teleprompter.js reemplaza la constante `VELOCIDAD_BASE_PX_S`
+    por la variable `velocidadBasePxS`, usada en `paso()`; persistida en el mismo objeto JSON de
+    localStorage bajo `velocidadBase`.)
+  - [x] La velocidad configurada por el usuario sigue combinándose correctamente con el control por
     voz de T8 (hablar más rápido/lento sigue acelerando/desacelerando proporcionalmente sobre la
-    nueva base, no la reemplaza).
-  - [ ] El selector de cámara permite cambiar entre frontal y trasera, la vista previa cambia al
+    nueva base, no la reemplaza). (`paso()` sigue calculando
+    `velocidadBasePxS * factorVelocidad * deltaSegundos` — el factor de voz de T8 multiplica sobre
+    la nueva base variable, no la reemplaza.)
+  - [x] El selector de cámara permite cambiar entre frontal y trasera, la vista previa cambia al
     lente correcto, no quedan streams de cámara huérfanos encendidos, y la preferencia persiste
-    tras recargar.
-  - [ ] Ningún cambio de esta tarea rompe el flujo de T12 (cámara habilita todo, grabar controla el
-    scroll, voz activa por defecto).
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+    tras recargar. (`cambiarLente()` pide el stream nuevo ANTES de detener el anterior — solo
+    detiene las pistas viejas tras confirmar éxito, evitando streams huérfanos; en fallo mantiene
+    el stream anterior intacto y muestra mensaje legible; reconecta voz.js al stream nuevo
+    reusando el mismo AudioContext.)
+  - [x] Ningún cambio de esta tarea rompe el flujo de T12 (cámara habilita todo, grabar controla el
+    scroll, voz activa por defecto). (Confirmado por lectura: `activarCamara()`, `iniciarGrabacion()`,
+    `IDS_CONTROLES_SECUNDARIOS`, y el toggle de `#panel-config` de T12 quedaron intactos — T13 solo
+    agregó `cambiarLente()` y ajustó `facingModeActual` inicial, sin tocar la lógica de habilitación
+    ni el acople grabar→scroll.)
+- **Evidencia del verificador**: Revisión de código línea por línea de los 5 archivos tocados
+  (index.html, css/estilos.css, teleprompter.js, ajustes.js, camara.js). Sintaxis validada
+  (`node --check` en los 5 JS, sin errores). Confirmado por grep que no hay import circular
+  (camara.js no importa de ajustes.js — ajustes.js lee la preferencia de lente de localStorage
+  directamente para evitarlo, documentado en un comentario). `cambiarLente()` bien defendido:
+  éxito-antes-de-destruir, mensajes de error legibles, mantiene stream anterior en fallo. El
+  preview en vivo está completamente aislado del teleprompter real (su propio rAF, su propia
+  posición, se detiene al cerrar el panel) — no puede interferir con una grabación en curso.
+  Assets sirven 200 en el servidor de :8080. **Nota importante**: mismo límite de todas las tareas
+  de esta sesión — sin cámara/mic reales en este entorno, el flujo completo (legibilidad real del
+  texto superpuesto sobre el video, sensación del preview en vivo, cambio de lente en un iPhone
+  real, combinación velocidad-base + voz) NO se pudo confirmar visualmente. El usuario debe
+  probarlo en su dispositivo antes de considerar T13 cerrada del todo.
 
 ---
 

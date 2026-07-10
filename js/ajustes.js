@@ -1,5 +1,8 @@
 console.log("cargado: ajustes");
 
+import { setVelocidadBase } from "./teleprompter.js";
+import { cambiarLente } from "./camara.js";
+
 /** Clave fija de localStorage donde se persisten los ajustes de tipografía/fondo (T9). */
 const CLAVE_AJUSTES = "teleprompter:ajustes";
 
@@ -13,6 +16,10 @@ function obtenerElementos() {
   const inputColorTexto = document.getElementById("input-color-texto");
   const inputOpacidadFondo = document.getElementById("input-opacidad-fondo");
   const inputProporcionCamara = document.getElementById("input-proporcion-camara");
+  const inputVelocidadBase = document.getElementById("input-velocidad-base");
+  const selectLenteCamara = document.getElementById("select-lente-camara");
+  const previewContenedor = document.getElementById("preview-ajustes-contenedor");
+  const previewTexto = document.getElementById("preview-ajustes-texto");
   return {
     panel,
     botonAlternar,
@@ -21,23 +28,37 @@ function obtenerElementos() {
     inputColorTexto,
     inputOpacidadFondo,
     inputProporcionCamara,
+    inputVelocidadBase,
+    selectLenteCamara,
+    previewContenedor,
+    previewTexto,
   };
 }
 
 /**
- * T10: límites del reparto cámara/texto. --tp-proporcion-camara es el % del
- * 85% disponible (zona-controles se mantiene fija en 15%) que ocupa la
- * cámara; el resto lo ocupa el texto. Se acota para que, en los extremos,
- * ninguna zona desaparezca: cámara nunca baja de 20% de la pantalla
- * (20/0.85 ≈ 23.5 en la escala 0-100 del slider) ni texto de 15% de la
- * pantalla (equivale a que la cámara no suba de (85-15)=70 en esa escala).
+ * T13, punto 1: límites de la franja de texto superpuesta. Cambio de
+ * semántica respecto a T10 — --tp-proporcion-camara ya NO es el % del 85%
+ * disponible que ocupa la cámara (dos zonas apiladas), sino el % de la
+ * altura TOTAL de pantalla que ocupa el bloque de texto superpuesto sobre la
+ * cámara (ver comentario en :root de estilos.css). Se acota entre 15
+ * (mínimo razonable para 1-2 líneas legibles) y 50 (no debe invadir el 15%
+ * fijo de #zona-controles ni tapar la mayor parte del video).
  */
-const PROPORCION_CAMARA_MIN = 24; // ~20% de pantalla para la cámara
-const PROPORCION_CAMARA_MAX = 70; // deja ~15% de pantalla para el texto
+const PROPORCION_CAMARA_MIN = 15;
+const PROPORCION_CAMARA_MAX = 50;
 
 function acotarProporcionCamara(valor) {
-  if (Number.isNaN(valor)) return 60;
+  if (Number.isNaN(valor)) return 30;
   return Math.min(PROPORCION_CAMARA_MAX, Math.max(PROPORCION_CAMARA_MIN, valor));
+}
+
+/** T13, punto 3: límites del slider de velocidad base (px/s). 24 = valor original. */
+const VELOCIDAD_BASE_MIN = 12;
+const VELOCIDAD_BASE_MAX = 45;
+
+function acotarVelocidadBase(valor) {
+  if (Number.isNaN(valor)) return 24;
+  return Math.min(VELOCIDAD_BASE_MAX, Math.max(VELOCIDAD_BASE_MIN, valor));
 }
 
 function leerVariableCss(nombre) {
@@ -55,6 +76,12 @@ function obtenerAjustesPorDefecto() {
     colorTexto: colorAHex(colorTexto),
     opacidadFondo: Number.isNaN(opacidadFondo) ? 0.55 : opacidadFondo,
     proporcionCamara: acotarProporcionCamara(proporcionCamara),
+    // T13, punto 3: velocidad base por defecto = 24 (el mismo valor original
+    // de la antigua constante VELOCIDAD_BASE_PX_S en teleprompter.js).
+    velocidadBase: 24,
+    // T13, punto 4: lente por defecto = frontal, igual que el facingMode
+    // fijo que usaba camara.js antes de esta tarea.
+    lenteCamara: "user",
   };
 }
 
@@ -92,8 +119,15 @@ function cargarAjustesGuardados() {
       return {
         ...datos,
         proporcionCamara: acotarProporcionCamara(
-          typeof datos.proporcionCamara === "number" ? datos.proporcionCamara : 60
+          typeof datos.proporcionCamara === "number" ? datos.proporcionCamara : 30
         ),
+        velocidadBase: acotarVelocidadBase(
+          typeof datos.velocidadBase === "number" ? datos.velocidadBase : 24
+        ),
+        lenteCamara:
+          datos.lenteCamara === "environment" || datos.lenteCamara === "user"
+            ? datos.lenteCamara
+            : "user",
       };
     }
     return null;
@@ -119,15 +153,25 @@ function aplicarAjustes(ajustes) {
     "--tp-proporcion-camara",
     String(acotarProporcionCamara(ajustes.proporcionCamara))
   );
+  // T13, punto 3: aplica también la velocidad base al teleprompter real.
+  setVelocidadBase(acotarVelocidadBase(ajustes.velocidadBase));
 }
 
 function sincronizarControles(elementos, ajustes) {
-  const { inputTamanoFuente, inputColorTexto, inputOpacidadFondo, inputProporcionCamara } =
-    elementos;
+  const {
+    inputTamanoFuente,
+    inputColorTexto,
+    inputOpacidadFondo,
+    inputProporcionCamara,
+    inputVelocidadBase,
+    selectLenteCamara,
+  } = elementos;
   if (inputTamanoFuente) inputTamanoFuente.value = String(ajustes.tamanoFuenteRem);
   if (inputColorTexto) inputColorTexto.value = ajustes.colorTexto;
   if (inputOpacidadFondo) inputOpacidadFondo.value = String(ajustes.opacidadFondo);
   if (inputProporcionCamara) inputProporcionCamara.value = String(ajustes.proporcionCamara);
+  if (inputVelocidadBase) inputVelocidadBase.value = String(ajustes.velocidadBase);
+  if (selectLenteCamara) selectLenteCamara.value = ajustes.lenteCamara;
 }
 
 function mostrarPanel(panel) {
@@ -149,6 +193,71 @@ function alternarPanel(panel) {
   }
 }
 
+// --- T13, punto 2: preview en vivo, aislado del teleprompter real ---------
+// Ciclo de scroll propio (su propio rAF) dentro de #preview-ajustes-texto,
+// que usa la velocidad base configurada (sin factor de voz: aquí no hay
+// nadie hablando, es solo para calibrar visualmente). No importa nada de
+// teleprompter.js para no compartir estado con una grabación en curso.
+let previewAnimando = false;
+let previewIdAnimacion = null;
+let previewUltimoTimestamp = null;
+let previewPosicionPx = 0;
+let previewVelocidadPxS = 24;
+
+function previewObtenerElementos() {
+  const contenedor = document.getElementById("preview-ajustes-contenedor");
+  const texto = document.getElementById("preview-ajustes-texto");
+  return { contenedor, texto };
+}
+
+function previewPaso(timestampActual) {
+  if (!previewAnimando) return;
+  const { contenedor, texto } = previewObtenerElementos();
+  if (!contenedor || !texto) {
+    previewAnimando = false;
+    return;
+  }
+
+  if (previewUltimoTimestamp === null) {
+    previewUltimoTimestamp = timestampActual;
+  }
+  const deltaSegundos = (timestampActual - previewUltimoTimestamp) / 1000;
+  previewUltimoTimestamp = timestampActual;
+
+  const maximo = Math.max(0, texto.scrollHeight - contenedor.clientHeight);
+  previewPosicionPx += previewVelocidadPxS * deltaSegundos;
+
+  if (previewPosicionPx >= maximo) {
+    // T13, punto 2: ciclo propio de reinicio cuando termina, para poder
+    // calibrar en bucle sin intervención manual.
+    previewPosicionPx = 0;
+    previewUltimoTimestamp = null;
+  }
+
+  texto.style.transform = `translateY(-${previewPosicionPx}px)`;
+  previewIdAnimacion = requestAnimationFrame(previewPaso);
+}
+
+function previewIniciar() {
+  if (previewAnimando) return;
+  previewAnimando = true;
+  previewUltimoTimestamp = null;
+  previewIdAnimacion = requestAnimationFrame(previewPaso);
+}
+
+function previewDetener() {
+  previewAnimando = false;
+  if (previewIdAnimacion !== null) {
+    cancelAnimationFrame(previewIdAnimacion);
+    previewIdAnimacion = null;
+  }
+  previewUltimoTimestamp = null;
+}
+
+function previewSetVelocidad(pxPorSegundo) {
+  previewVelocidadPxS = Number(pxPorSegundo) || 24;
+}
+
 function inicializarAjustes() {
   const elementos = obtenerElementos();
   const {
@@ -159,6 +268,8 @@ function inicializarAjustes() {
     inputColorTexto,
     inputOpacidadFondo,
     inputProporcionCamara,
+    inputVelocidadBase,
+    selectLenteCamara,
   } = elementos;
 
   if (!panel) {
@@ -174,18 +285,31 @@ function inicializarAjustes() {
 
   aplicarAjustes(ajustesIniciales);
   sincronizarControles(elementos, ajustesIniciales);
+  previewSetVelocidad(ajustesIniciales.velocidadBase);
   if (!ajustesGuardados) {
     guardarAjustes(ajustesIniciales);
   }
 
   if (botonAlternar) {
-    botonAlternar.addEventListener("click", () => alternarPanel(panel));
+    botonAlternar.addEventListener("click", () => {
+      alternarPanel(panel);
+      // El preview solo corre mientras el panel está abierto, para no
+      // desperdiciar un rAF en segundo plano.
+      if (!panel.hidden) {
+        previewIniciar();
+      } else {
+        previewDetener();
+      }
+    });
   } else {
     console.warn("ajustes: no se encontró #btn-alternar-ajustes en el DOM");
   }
 
   if (botonCerrar) {
-    botonCerrar.addEventListener("click", () => ocultarPanel(panel));
+    botonCerrar.addEventListener("click", () => {
+      ocultarPanel(panel);
+      previewDetener();
+    });
   } else {
     console.warn("ajustes: no se encontró #btn-cerrar-ajustes en el DOM");
   }
@@ -204,8 +328,15 @@ function inicializarAjustes() {
           ? parseFloat(inputProporcionCamara.value)
           : ajustesIniciales.proporcionCamara
       ),
+      velocidadBase: acotarVelocidadBase(
+        inputVelocidadBase
+          ? parseFloat(inputVelocidadBase.value)
+          : ajustesIniciales.velocidadBase
+      ),
+      lenteCamara: selectLenteCamara ? selectLenteCamara.value : ajustesIniciales.lenteCamara,
     };
     aplicarAjustes(ajustes);
+    previewSetVelocidad(ajustes.velocidadBase);
     guardarAjustes(ajustes);
   }
 
@@ -231,6 +362,32 @@ function inicializarAjustes() {
     inputProporcionCamara.addEventListener("input", actualizarYGuardar);
   } else {
     console.warn("ajustes: no se encontró #input-proporcion-camara en el DOM");
+  }
+
+  if (inputVelocidadBase) {
+    inputVelocidadBase.addEventListener("input", actualizarYGuardar);
+  } else {
+    console.warn("ajustes: no se encontró #input-velocidad-base en el DOM");
+  }
+
+  // T13, punto 4: selector de cámara/lente. Al cambiar, persiste la
+  // preferencia y pide a camara.js que cambie el stream activo en vivo (si
+  // ya hay uno). Si falla, camara.js se encarga de mostrar el mensaje y
+  // mantener el stream anterior — aquí solo revertimos el <select> visual.
+  if (selectLenteCamara) {
+    selectLenteCamara.addEventListener("change", async () => {
+      const lenteElegida = selectLenteCamara.value;
+      const exito = await cambiarLente(lenteElegida);
+      if (!exito) {
+        // Revierte el control a la lente que sigue realmente activa.
+        const ajustesActuales = cargarAjustesGuardados() ?? ajustesIniciales;
+        selectLenteCamara.value = ajustesActuales.lenteCamara;
+        return;
+      }
+      actualizarYGuardar();
+    });
+  } else {
+    console.warn("ajustes: no se encontró #select-lente-camara en el DOM");
   }
 }
 

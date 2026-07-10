@@ -71,8 +71,29 @@
       <input id="input-opacidad-fondo" type="range" min="0" max="1" step="0.05">
     </div>
     <div class="campo-ajuste">
-      <label for="input-proporcion-camara">Proporción cámara / texto</label>
-      <input id="input-proporcion-camara" type="range" min="24" max="70" step="1">
+      <label for="input-proporcion-camara">Altura del texto superpuesto</label>
+      <input id="input-proporcion-camara" type="range" min="15" max="50" step="1">
+    </div>
+    <div class="campo-ajuste">
+      <label for="input-velocidad-base">Velocidad del teleprompter</label>
+      <input id="input-velocidad-base" type="range" min="12" max="45" step="1">
+    </div>
+    <div class="campo-ajuste">
+      <label for="select-lente-camara">Cámara / lente</label>
+      <select id="select-lente-camara">
+        <option value="user">Frontal</option>
+        <option value="environment">Trasera</option>
+      </select>
+    </div>
+    <!-- T13, punto 2: preview en vivo, aislado del teleprompter real (no
+         depende de js/teleprompter.js) para no interferir con una grabación
+         en curso. Se actualiza con las mismas variables CSS y tiene su
+         propio ciclo de scroll con la velocidad configurada. -->
+    <div class="campo-ajuste" id="campo-preview-ajustes">
+      <label for="preview-ajustes-contenedor">Vista previa</label>
+      <div id="preview-ajustes-contenedor">
+        <div id="preview-ajustes-texto">Así se verá tu guion mientras hablas.</div>
+      </div>
     </div>
     <button id="btn-cerrar-ajustes" type="button">Cerrar ajustes</button>
   </div>

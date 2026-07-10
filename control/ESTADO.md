@@ -5,17 +5,20 @@ Máximo 60 líneas. Si la conversación se borrara, este archivo tiene que basta
 
 ## Ahora mismo
 
-- **En curso**: ninguna — T1-T12 implementadas. La v1 se publicó en GitHub Pages y el usuario
-  confirmó que la cámara/grabación/descarga funcionan de verdad en su iPhone. T12 (flujo
-  simplificado + voz por defecto + velocidad más lenta) recién se implementó tras ese primer
-  feedback y está pendiente de que el usuario la pruebe en el dispositivo.
+- **En curso**: ninguna — T1-T13 implementadas. El usuario confirmó en su iPhone que T12 (flujo
+  simplificado) funciona mucho mejor: activar cámara habilita todo, botón grande de grabar,
+  configuración agrupada. T13 (texto superpuesto sobre la cámara, preview en vivo en ajustes,
+  velocidad y lente configurables) recién se implementó a partir de ese segundo feedback y está
+  pendiente de que el usuario la pruebe en el dispositivo.
 - **Siguiente paso concreto**: pedirle al usuario que abra
-  https://juandiegorodri.github.io/teleprompter-app/ en su iPhone y confirme los 6 puntos de T12
-  (controles bloqueados hasta activar cámara, voz activada sin botón extra, teleprompter que solo
-  se mueve al grabar, velocidad más lenta y legible, menú de configuración agrupado). Si algo
-  falla, corregirlo antes de pasar a la fase de diseño (superponer texto/cámara, selector de
-  lente, preview de tipografía, slider de velocidad — anotado en Ideas/futuro de TAREAS.md).
-- **Tareas cerradas desde la última limpieza**: 12 *(YA TOCA la pasada anti-deriva)*
+  https://juandiegorodri.github.io/teleprompter-app/ en su iPhone y confirme los 6 puntos de T13
+  (texto legible superpuesto sobre el video, preview en vivo al mover los sliders de ajustes,
+  slider de velocidad afecta el teleprompter real y persiste, se sigue combinando con la voz,
+  selector de lente frontal/trasera funciona sin dejar cámaras huérfanas encendidas). Si algo
+  falla, corregirlo. Si todo funciona, ya no quedan pendientes conocidos de la fase de diseño
+  que el usuario pidió — el siguiente paso natural sería la pasada anti-deriva (13 tareas
+  cerradas) y/o cerrar la sesión con un resumen para el usuario.
+- **Tareas cerradas desde la última limpieza**: 13 *(YA TOCA la pasada anti-deriva)*
 
 ## Qué funciona (verificado por el verificador)
 
@@ -24,32 +27,30 @@ logros vive en las tareas cerradas de TAREAS.md con su evidencia — esas no se 
 
 | Funcionalidad | Verificada | Cómo se probó |
 |---|---|---|
-| Cámara, grabación y descarga del video | 2026-07-10 | **CONFIRMADO POR EL USUARIO en iPhone real** vía GitHub Pages (HTTPS) |
-| Teleprompter con scroll | 2026-07-10 | Confirmado por el usuario que se mueve; velocidad reportada como "muy rápida" — ajustada en T12, pendiente reconfirmar |
-| Publicación en GitHub Pages | 2026-07-10 | `https://juandiegorodri.github.io/teleprompter-app/` responde 200 con el HTML correcto |
-| Editor de guion con localStorage | 2026-07-10 | Revisión de código, sintaxis validada — no probado en vivo por el usuario aún |
-| Detección de voz (VAD) + enganche a velocidad | 2026-07-10 | Revisión de código; el usuario confirmó indirectamente que el modo voz mueve el texto, pero reportó bugs de flujo — corregidos en T12 |
-| Ajustes de tipografía/fondo + proporción cámara/texto | 2026-07-10 | Revisión de código — no probado en vivo por el usuario aún |
+| Cámara, grabación y descarga del video | 2026-07-10 | **CONFIRMADO POR EL USUARIO en iPhone real** |
+| Flujo T12 (cámara habilita todo, botón grande grabar, config agrupada) | 2026-07-10 | **CONFIRMADO POR EL USUARIO**: "ya está funcionando muchísimo mejor" |
+| Publicación en GitHub Pages | 2026-07-10 | `https://juandiegorodri.github.io/teleprompter-app/` responde 200, se actualiza en cada push |
+| Editor de guion con localStorage | 2026-07-10 | Revisión de código — no probado en vivo por el usuario aún |
+| Detección de voz (VAD) + enganche a velocidad, ON por defecto | 2026-07-10 | Confirmado indirectamente por el usuario (el modo voz mueve el texto) |
 | Manifest PWA + iconos + safe-areas | 2026-07-10 | JSON e iconos válidos; instalación a pantalla de inicio no confirmada aún |
-| T12: flujo simplificado (cámara habilita todo, grabar controla scroll, voz por defecto) | 2026-07-10 | Revisión de código exhaustiva — recién implementado, PENDIENTE de que el usuario lo pruebe en su iPhone |
+| T13: texto superpuesto + preview en vivo + velocidad/lente configurables | 2026-07-10 | Revisión de código exhaustiva — recién implementado, PENDIENTE de que el usuario lo pruebe en su iPhone |
 
 ## Bloqueos y decisiones pendientes
 
-- **Pendiente de reconfirmación en iPhone real**: T12 se implementó a partir del feedback del
+- **Pendiente de reconfirmación en iPhone real**: T13 se implementó a partir del feedback del
   usuario pero aún no la ha probado. Es el paso inmediato siguiente.
-- **Toca pasada anti-deriva** (12 tareas cerradas): pendiente, hacerla después de que T12 quede
-  confirmada y estable.
-- **Bug abierto #1**: resuelto por diseño en T12 (ya no puede ocurrir el escenario que lo causaba).
-- **Fase de diseño pendiente** (explícitamente pedida por el usuario para después): superponer
-  texto sobre cámara, selector de lente frontal/trasera, preview en vivo de tipografía en ajustes,
-  control de velocidad por defecto en el panel — todo detallado en Ideas/futuro de TAREAS.md.
-- Túnel de localtunnel (`https://violet-donuts-yawn.loca.lt`) usado para pruebas tempranas ya no
-  es necesario — se reemplazó por GitHub Pages como URL estable de prueba/entrega.
+- **Toca pasada anti-deriva** (13 tareas cerradas): pendiente, hacerla después de que T13 quede
+  confirmada y estable — revisar en particular si algún doc de control (MAPA.md especialmente)
+  quedó desalineado tras el rediseño de layout de T13.
+- No quedan bugs abiertos conocidos ni ítems pendientes explícitos de "fase de diseño" — T13 cubrió
+  todo lo que el usuario había pedido dejar para después.
+- Túnel de localtunnel usado en pruebas tempranas ya no es necesario — GitHub Pages es la URL
+  estable de prueba/entrega desde la sesión anterior.
 
 ## Última sesión
 
 2026-07-10 — sesión larga: instalación del sistema + plan (11 tareas) + T1-T11 implementadas +
-publicación en GitHub Pages (`juandiegorodri/teleprompter-app`, Pages sirviendo `main`) + primera
-prueba real del usuario en su iPhone (cámara/grabación/descarga confirmados funcionando) + T12
-implementada a partir de ese feedback (flujo simplificado, voz por defecto, velocidad más lenta).
-Falta que el usuario reconfirme T12 en su dispositivo.
+publicación en GitHub Pages + primera prueba real del usuario (cámara/grabación/descarga
+funcionando) + T12 (flujo simplificado, confirmado por el usuario como mucho mejor) + T13
+(texto sobre cámara, preview en vivo, velocidad/lente configurables) a partir del segundo
+feedback. Falta que el usuario reconfirme T13 en su dispositivo.

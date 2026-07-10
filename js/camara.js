@@ -43,6 +43,28 @@ let grabando = false;
 let mimeTypeElegido = "";
 let urlObjetoAnterior = null;
 
+// T13, punto 4: facingMode actualmente en uso. Arranca en "user" (frontal,
+// comportamiento previo a T13) pero se sobreescribe con la preferencia
+// guardada en localStorage (misma clave que usa js/ajustes.js) antes del
+// primer activarCamara(), si existe.
+let facingModeActual = "user";
+
+/** Misma clave de localStorage que CLAVE_AJUSTES en js/ajustes.js — se lee
+ * directamente aquí (sin importar ajustes.js) para evitar una dependencia
+ * circular, ya que ajustes.js importa cambiarLente() de este módulo. */
+const CLAVE_AJUSTES = "teleprompter:ajustes";
+
+function leerLentePreferida() {
+  try {
+    const crudo = localStorage.getItem(CLAVE_AJUSTES);
+    if (!crudo) return "user";
+    const datos = JSON.parse(crudo);
+    return datos && datos.lenteCamara === "environment" ? "environment" : "user";
+  } catch (error) {
+    return "user";
+  }
+}
+
 const CANDIDATOS_MIME = [
   "video/mp4",
   "video/webm;codecs=vp9,opus",
@@ -90,8 +112,11 @@ async function activarCamara() {
   }
 
   try {
+    // T13, punto 4: usa la lente guardada en ajustes (si existe) como
+    // facingMode inicial la primera vez que se activa la cámara.
+    facingModeActual = leerLentePreferida();
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" },
+      video: { facingMode: facingModeActual },
       audio: true,
     });
     streamActual = stream;
@@ -131,6 +156,80 @@ async function activarCamara() {
     }
     mostrarMensaje(texto);
   }
+}
+
+/**
+ * T13, punto 4: cambia la lente activa (frontal/trasera) en vivo, sin recargar
+ * la página. Pide un stream nuevo con el facingMode solicitado ANTES de tocar
+ * el stream anterior — si falla (dispositivo sin cámara trasera, permiso
+ * denegado, etc.) el stream anterior sigue activo e intacto. Si tiene éxito,
+ * detiene las pistas viejas, reemplaza streamActual/window.__appStream/
+ * srcObject del video, y reconecta la detección de voz (voz.js) al stream
+ * nuevo reusando el mismo AudioContext (inicializarAudioContext es idempotente:
+ * si el AudioContext ya existe, solo crea una MediaStreamSource nueva).
+ * @param {string} nuevoFacingMode - "user" (frontal) o "environment" (trasera).
+ * @returns {Promise<boolean>} true si el cambio tuvo éxito.
+ */
+export async function cambiarLente(nuevoFacingMode) {
+  if (nuevoFacingMode !== "user" && nuevoFacingMode !== "environment") {
+    console.warn("camara: cambiarLente recibió un facingMode inválido", nuevoFacingMode);
+    return false;
+  }
+
+  if (!streamActual) {
+    // Aún no se ha activado la cámara: solo actualiza la preferencia para
+    // que activarCamara() la use como facingMode inicial.
+    facingModeActual = nuevoFacingMode;
+    return true;
+  }
+
+  if (nuevoFacingMode === facingModeActual) {
+    return true;
+  }
+
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    mostrarMensaje("No se puede cambiar de cámara en este contexto (requiere HTTPS o localhost).");
+    return false;
+  }
+
+  let streamNuevo;
+  try {
+    streamNuevo = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: nuevoFacingMode },
+      audio: true,
+    });
+  } catch (error) {
+    console.error("Error al cambiar de cámara:", error);
+    let texto = "No se pudo cambiar de cámara. Se mantiene la cámara actual.";
+    if (error && (error.name === "NotAllowedError" || error.name === "PermissionDeniedError")) {
+      texto = "Permiso denegado para la nueva cámara. Se mantiene la cámara actual.";
+    } else if (error && error.name === "NotFoundError") {
+      texto = "Este dispositivo no tiene esa cámara disponible. Se mantiene la cámara actual.";
+    }
+    mostrarMensaje(texto);
+    return false;
+  }
+
+  // Éxito: recién ahora se detiene el stream anterior y se reemplaza todo.
+  const streamAnterior = streamActual;
+  streamActual = streamNuevo;
+  window.__appStream = streamNuevo;
+  facingModeActual = nuevoFacingMode;
+
+  if (videoCamara) {
+    videoCamara.srcObject = streamNuevo;
+  }
+
+  if (streamAnterior) {
+    streamAnterior.getTracks().forEach((pista) => pista.stop());
+  }
+
+  // Reconecta la detección de voz al stream nuevo (mismo AudioContext, nueva
+  // MediaStreamSource — ver comentario de inicializarAudioContext en voz.js).
+  inicializarAudioContext(streamNuevo);
+
+  ocultarMensaje();
+  return true;
 }
 
 function iniciarGrabacion() {

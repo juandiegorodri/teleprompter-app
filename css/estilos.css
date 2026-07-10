@@ -16,17 +16,19 @@ html, body {
   --tp-font-size: 1.15rem;
   --tp-color-texto: #ffffff;
   --tp-opacidad-fondo: 0.55;
-  /* T10: porcentaje del alto disponible para cámara+texto (85% de la
-     pantalla, ya que #zona-controles se mantiene fija en 15%) que se asigna
-     a #zona-camara. El resto de ese 85% lo toma #zona-texto.
-     Valor bajo = menos cámara/más texto; valor alto = más cámara/menos
-     texto. El slider (js/ajustes.js) limita el rango a [24, 70] para que
-     ninguna zona desaparezca: 24 → cámara ≈ 20.4% de pantalla (mínimo
-     razonable para seguir viéndose), 70 → texto ≈ 12.75% + queda encima el
-     15% fijo de controles, manteniendo el texto legible con varias líneas.
+  /* T13, punto 1: cambio de semántica respecto a T10. Antes repartía el 85%
+     disponible entre #zona-camara y #zona-texto como dos zonas apiladas sin
+     solapamiento. Ahora el texto se SUPERPONE sobre la franja superior de
+     #zona-camara (que ocupa casi toda la pantalla, menos #zona-controles fijo
+     abajo). --tp-proporcion-camara pasa a significar: porcentaje de la altura
+     TOTAL de pantalla que ocupa la franja de texto superpuesta (antes era el
+     % de cámara dentro del 85%). Valor bajo = franja de texto más baja/corta;
+     valor alto = franja más alta/más líneas visibles. El slider (js/ajustes.js)
+     limita el rango a [15, 50] para que el texto no desaparezca (mínimo
+     razonable para 1-2 líneas) ni tape los controles fijos del 15% inferior.
      acotarProporcionCamara() en JS aplica el mismo límite como red de
      seguridad por si se carga un valor fuera de rango desde localStorage. */
-  --tp-proporcion-camara: 60;
+  --tp-proporcion-camara: 30;
 }
 
 #zona-camara {
@@ -34,7 +36,10 @@ html, body {
   top: 0;
   left: 0;
   width: 100%;
-  height: calc(var(--tp-proporcion-camara) * 0.85%);
+  /* T13, punto 1: la cámara ocupa prácticamente toda la pantalla disponible,
+     dejando solo el 15% fijo de #zona-controles abajo. El texto ya no le
+     resta espacio propio: se superpone encima. */
+  height: 85%;
   border: 2px solid #0ff;
   background: rgba(0, 255, 255, 0.08);
   overflow: hidden;
@@ -68,17 +73,25 @@ html, body {
 }
 
 #zona-texto {
-  /* T12, punto 8: top coincide exactamente con la altura de #zona-camara (mismo
-     cálculo * 0.85%), así que no hay margin/padding entre ambas zonas que las
-     separe — quedan apiladas sin espacio extra. */
+  /* T13, punto 1: el texto ya NO es una zona apilada debajo de la cámara —
+     se superpone sobre la franja superior de #zona-camara (mismo top: 0),
+     con z-index por encima de #video-camara para quedar legible encima del
+     video en vivo. Su altura la controla --tp-proporcion-camara como % de la
+     pantalla completa (ver comentario en :root). */
   position: absolute;
-  top: calc(var(--tp-proporcion-camara) * 0.85%);
+  top: 0;
   left: 0;
   width: 100%;
-  height: calc((100 - var(--tp-proporcion-camara)) * 0.85%);
+  height: calc(var(--tp-proporcion-camara) * 1%);
+  z-index: 5;
   border: 2px solid #ff0;
   background: rgba(255, 255, 0, 0.08);
   padding: 0.5em;
+  /* Mismo motivo que #zona-camara: que el texto no quede bajo el notch/isla
+     dinámica en iOS. */
+  padding-top: calc(0.5em + env(safe-area-inset-top, 0px));
+  padding-left: calc(0.5em + env(safe-area-inset-left, 0px));
+  padding-right: calc(0.5em + env(safe-area-inset-right, 0px));
 }
 
 #teleprompter-contenedor {
@@ -347,4 +360,34 @@ button:disabled {
 
 #btn-cerrar-ajustes {
   padding: 0.75em;
+}
+
+/* T13, punto 2: preview en vivo dentro de #panel-ajustes. Reusa las mismas
+   variables CSS que el teleprompter real (--tp-font-size/--tp-color-texto/
+   --tp-opacidad-fondo) para que el usuario vea el efecto exacto sin grabar.
+   La animación de scroll la maneja un rAF propio y aislado en ajustes.js. */
+#preview-ajustes-contenedor {
+  width: 100%;
+  height: 5.5em;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, var(--tp-opacidad-fondo));
+  border: 1px solid #333;
+}
+
+#preview-ajustes-texto {
+  width: 100%;
+  padding: 0.5em 0.75em;
+  color: var(--tp-color-texto);
+  font-size: var(--tp-font-size);
+  line-height: 1.5;
+  font-weight: 500;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  will-change: transform;
+}
+
+#campo-preview-ajustes label {
+  font-size: 0.9rem;
+  display: block;
+  margin-bottom: 0.35em;
 }

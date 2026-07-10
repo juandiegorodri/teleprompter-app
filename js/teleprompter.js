@@ -51,8 +51,11 @@ export function montarTexto(texto) {
 /** Velocidad base en píxeles por segundo. Multiplicada por el factor de setVelocidad().
  * T12, punto 7: reducida de 40 a 24 (junto con el rango de FACTOR_*_HABLANDO en
  * voz.js, ahora 0.4-1.8) para que el avance por defecto sea notablemente más
- * lento y legible, dado que el modo voz ahora está activo desde el arranque. */
-const VELOCIDAD_BASE_PX_S = 24;
+ * lento y legible, dado que el modo voz ahora está activo desde el arranque.
+ * T13, punto 3: dejó de ser una constante — ahora es una variable modificable
+ * en vivo desde el panel de ajustes vía setVelocidadBase(), persistida en
+ * localStorage junto con el resto de ajustes de T9/T10. */
+let velocidadBasePxS = 24;
 
 let factorVelocidad = 1;
 let posicionActualPx = 0;
@@ -72,6 +75,22 @@ export function setVelocidad(factor) {
     return;
   }
   factorVelocidad = valor;
+}
+
+/**
+ * T13, punto 3: cambia la velocidad BASE (px/s) en vivo, reemplazando la
+ * antigua constante VELOCIDAD_BASE_PX_S. js/ajustes.js la llama al mover el
+ * slider "Velocidad del teleprompter" y persiste el valor. Se sigue
+ * combinando con el factor de voz (setVelocidad) — no lo reemplaza.
+ * @param {number} pxPorSegundo - Nueva velocidad base en píxeles por segundo. Debe ser > 0.
+ */
+export function setVelocidadBase(pxPorSegundo) {
+  const valor = Number(pxPorSegundo);
+  if (!Number.isFinite(valor) || valor <= 0) {
+    console.warn("teleprompter: setVelocidadBase recibió un valor inválido", pxPorSegundo);
+    return;
+  }
+  velocidadBasePxS = valor;
 }
 
 function obtenerElementos() {
@@ -102,7 +121,7 @@ function paso(timestampActual) {
   ultimoTimestamp = timestampActual;
 
   const maximo = desplazamientoMaximoPx();
-  posicionActualPx += VELOCIDAD_BASE_PX_S * factorVelocidad * deltaSegundos;
+  posicionActualPx += velocidadBasePxS * factorVelocidad * deltaSegundos;
 
   if (posicionActualPx >= maximo) {
     posicionActualPx = maximo;
