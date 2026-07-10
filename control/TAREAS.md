@@ -978,7 +978,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 13 — Ajustes y configuración (con calidad de cámara y fps — requisito nuevo del usuario)
 
-### ⬜ T19. Modelo de ajustes + persistencia en UserDefaults
+### ✅ T19. Modelo de ajustes + persistencia en UserDefaults
 
 - **Alcance**:
   - INCLUYE: en `ios/TelepromtCam/Ajustes/`, un tipo `AjustesStore` (`@Observable`) que centraliza y
@@ -1003,13 +1003,23 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
   `ios/TelepromtCam/Ajustes/CalidadCamara.swift`, `ios/TelepromtCam/Ajustes/FPS.swift` (o todo en un
   archivo si el constructor prefiere; documentar).
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
-  - [ ] Revisión de código: cada propiedad se lee/escribe en `UserDefaults` con clave estable; faltas
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [x] Revisión de código: cada propiedad se lee/escribe en `UserDefaults` con clave estable; faltas
     de clave caen a default sin crash; los enums de calidad y fps existen y mapean a los tipos de
     AVFoundation correctos.
-  - [ ] Existe un único punto (`AjustesStore`) del que dependen las pantallas — no hay lectura directa
+  - [x] Existe un único punto (`AjustesStore`) del que dependen las pantallas — no hay lectura directa
     dispersa de `UserDefaults` en la UI (verificable por revisión).
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`.
+  `grep -rn "UserDefaults" ios/TelepromtCam --include="*.swift"` confirma que el único uso real está
+  en `AjustesStore.swift` (las otras dos apariciones en `CalidadCamara.swift`/`FPS.swift` son solo
+  comentarios). Buena decisión de diseño no reportada como riesgo: usa
+  `defaults.object(forKey:) != nil` antes de confiar en `.double`/`.integer` (evita el bug clásico de
+  que UserDefaults devuelve `0` silenciosamente para una clave ausente, que rompería el "cae a
+  default" si no se hiciera así). Claves centralizadas en un enum privado evita typos entre lectura
+  y escritura. Color persistido como 4 componentes RGBA (no hex) — buena decisión, sin pérdida de
+  precisión. Enums de calidad/fps con raw values estables y `init?(rawValue:)` con fallback a
+  default si el valor guardado no matchea. Con esto queda listo el modelo para que T20 construya la
+  UI sobre él.
 
 ### ⬜ T20. Pantalla de Ajustes en SwiftUI (calidad, fps, lente, tipografía, opacidad, velocidad) con preview en vivo y aplicación a la sesión
 
