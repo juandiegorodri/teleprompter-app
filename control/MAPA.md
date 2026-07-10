@@ -17,6 +17,24 @@ cuadra con la realidad, toca pasada anti-deriva.*
 | js/editor.js | Editor del guion (crear/editar texto), guardado en `localStorage` | constructor |
 | js/ajustes.js | Controles de tipografía (tamaño/color), fondo del texto (opaco/translúcido), proporción cámara/texto | constructor |
 
+## App nativa iOS (planeado — Fases 11-20, T16-T27, se confirma tarea por tarea)
+
+*Proyecto Xcode independiente en `ios/`, sin código compartido con la web app — ver ADR en
+ARQUITECTURA.md. Bundle id `com.juandiegorodri.teleprompter`, nombre App Store "TelepromtCam".*
+
+| Ruta | Qué es / qué contiene | Rol que la toca |
+|---|---|---|
+| ios/TelepromtCam.xcodeproj/ | Proyecto Xcode, grupo sincronizado con el sistema de archivos | constructor |
+| ios/TelepromtCam/App/ | `TelepromtCamApp.swift` (@main), `Info.plist` (usage strings), `Assets.xcassets` (icono, color de acento) | constructor |
+| ios/TelepromtCam/Camara/ | AVCaptureSession, preview, selección de lente, grabación con AVCaptureMovieFileOutput | constructor |
+| ios/TelepromtCam/Voz/ | AVAudioEngine, VAD por energía RMS, enganche a velocidad del teleprompter | constructor |
+| ios/TelepromtCam/Teleprompter/ | Overlay de texto sobre cámara, scroll con velocidad configurable | constructor |
+| ios/TelepromtCam/Editor/ | Editor de guion con persistencia | constructor |
+| ios/TelepromtCam/Ajustes/ | Pantalla de configuración: calidad de cámara, fps, lente, tipografía, velocidad; persistencia UserDefaults | constructor |
+| ios/TelepromtCam/Comun/ | Utilidades compartidas entre módulos nativos | constructor |
+| ios/AppStore/ | Assets de App Store (icon set, metadata.md, política de privacidad) — llega en T25/T26 | constructor |
+| privacidad.html (raíz del repo) | Página de privacidad/soporte servida vía GitHub Pages, referenciada desde App Store Connect | constructor |
+
 ## Control y configuración
 
 | Ruta | Qué es | Cuándo leerla |

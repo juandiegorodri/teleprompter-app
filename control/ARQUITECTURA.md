@@ -91,3 +91,51 @@ archivo por archivo vive en MAPA.md.
   Store (firmar con el Apple Developer Program, subir el build vía Xcode/Transporter, completar
   App Store Connect) es una acción que solo el usuario puede ejecutar con sus propias credenciales
   — el agente deja el proyecto, los assets y los textos listos, pero no ejecuta el submit.
+
+### 2026-07-10 — Sub-decisión: estructura de carpetas iOS + build verificable por línea de comandos (sub-ADR del ADR nativo)
+
+*Sub-decisión técnica no cubierta por el ADR nativo anterior; la escribe el arquitecto porque
+condiciona el DoD de todas las tareas de código iOS.*
+
+- **Hallazgo del entorno (verificado 2026-07-10)**: este equipo SÍ tiene `Xcode 26.6`
+  (`xcodebuild`, `swift 6.3.3`, `swiftc`), `xcrun simctl` con un simulador `iPhone 17 Pro`
+  (iOS 26.5) y `sips` (redimensionado de PNG nativo). NO tiene `xcodegen`, `tuist` ni Python PIL.
+  Corrección importante al supuesto inicial: la compilación por línea de comandos **es posible y
+  verificable en este entorno** (no es del todo headless para *build*); lo que NO es posible es la
+  prueba visual/funcional interactiva (grabar con cámara real, ver overlay sobre video en vivo,
+  sentir la calibración de voz con micrófono real) — eso sigue siendo del usuario en su iPhone,
+  igual que pasó con Safari iOS en la web app.
+- **Decisión — proyecto `.xcodeproj` real y comprometido, con grupo sincronizado con el sistema de
+  archivos (file-system synchronized group, Xcode 16+ / `PBXFileSystemSynchronizedRootGroup`)**: el
+  scaffold genera y compromete un `ios/TelepromtCam.xcodeproj` real (el usuario solo abre y compila,
+  sin instalar herramientas). Para evitar la fragilidad clásica de editar el `project.pbxproj` a mano
+  en cada tarea (lo que rompería la regla de "build verde tarea a tarea"), la carpeta de fuentes se
+  declara como **grupo sincronizado con el sistema de archivos**: agregar un `.swift` nuevo dentro de
+  la carpeta lo incluye automáticamente en el target, sin tocar el pbxproj. Así cada tarea añade
+  archivos Swift sin editar la definición del proyecto.
+  - **Descartado**: XcodeGen/Tuist (`project.yml`) — no están instalados en este entorno, así que el
+    constructor no podría regenerar/verificar el proyecto aquí, y obligarían al usuario a
+    `brew install` una herramienta antes de abrir en Xcode; el grupo sincronizado nativo resuelve el
+    mismo problema (agregar archivos sin editar pbxproj) sin dependencia externa. Descartado también
+    editar el pbxproj a mano por archivo (fragilidad que rompe el build entre tareas).
+- **Ancla de verificación (DoD) para toda tarea de código iOS** — lo que SÍ es verificable sin GUI:
+  1. `xcodebuild -project ios/TelepromtCam.xcodeproj -scheme TelepromtCam -sdk iphonesimulator
+     -destination 'generic/platform=iOS Simulator' build` termina con `** BUILD SUCCEEDED **` y 0
+     errores (warnings admisibles, anotados).
+  2. `swiftc -parse` (o el propio build) sin errores de sintaxis en los archivos tocados.
+  3. Revisión de código exhaustiva contra el alcance.
+  4. (Opcional, cuando aporte) smoke-launch headless en el simulador vía `xcrun simctl` para
+     confirmar que la app arranca sin crash de inicio.
+  - **La prueba visual/funcional final en simulador GUI o dispositivo real la hace el usuario** — se
+    declara explícito en cada tarea, mismo patrón que la web app.
+- **Estructura de carpetas de `ios/`** (la referencia canónica; MAPA.md debe reflejarla al cierre):
+  - `ios/TelepromtCam.xcodeproj/` — proyecto comprometido (grupo sincronizado).
+  - `ios/TelepromtCam/` — código fuente (grupo sincronizado). Dentro: `App/` (entry `@main`,
+    `Info.plist`, `Assets.xcassets` con AppIcon + AccentColor, `LaunchScreen`), `Camara/`
+    (AVCaptureSession, preview, grabación), `Voz/` (AVAudioEngine VAD), `Teleprompter/` (overlay +
+    scroll), `Editor/`, `Ajustes/` (modelo + pantalla), `Comun/` (utilidades, PHPhotoLibrary).
+  - `ios/AppStore/` — entregables de texto para App Store Connect (metadata, política de privacidad,
+    checklist de publicación) en `.md`/`.txt` listos para copiar/pegar; NO forman parte del target.
+  - **Bundle id** `com.juandiegorodri.teleprompter`, **display name** `TelepromtCam`, **deployment
+    target iOS 17.0** (permite `@Observable`, `TimelineView`, SwiftUI moderno; cubre esencialmente
+    todos los dispositivos activos en 2026 — "lo aburrido y probado" sin arrastrar APIs legacy).
