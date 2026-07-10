@@ -438,6 +438,63 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 
 ---
 
+## Fase 7 — Ajustes de flujo de uso (feedback de prueba real en iPhone)
+
+### ⬜ T12. Flujo simplificado: cámara habilita todo, grabar controla el teleprompter, voz por defecto
+
+- **Alcance**:
+  - INCLUYE:
+    1. **Botón grande y prominente** para la acción principal: al cargar, es "Activar cámara"; una
+       vez la cámara está activa, se convierte en el botón grande de "Grabar" / "Detener".
+    2. **Todo deshabilitado hasta activar cámara**: `#btn-modo-voz`, `#btn-play-pausa`,
+       `#btn-reiniciar`, `#btn-alternar-editor`, `#btn-alternar-ajustes` y `#btn-grabar` arrancan
+       `disabled`. Se habilitan recién cuando `getUserMedia` resuelve con éxito.
+    3. **Fusionar la activación de voz con la de cámara**: eliminar el botón separado
+       `#btn-activar-voz` — al activar la cámara con éxito, en el mismo gesto de click, también se
+       inicializa el `AudioContext`/`AnalyserNode` de voz.js (reusar el mismo tap como gesto de
+       usuario válido para `audioContext.resume()`). Modo voz queda **activado por defecto**
+       (`modoVozActivo = true` desde el inicio, sin que el usuario tenga que tocar nada).
+    4. **El teleprompter NO se mueve hasta grabar**: quitar la llamada a `iniciarScroll()` de
+       `activarModoVoz()` — activar/desactivar el toggle de "Modo voz" (ahora movido al menú de
+       configuración) solo cambia si el scroll, cuando arranque, será controlado por voz o a
+       velocidad manual constante; nunca inicia o detiene el scroll por sí mismo.
+    5. **Grabar controla el teleprompter**: el botón grande de grabar, al iniciar, llama
+       `iniciarScroll()` (si Modo voz ON, el enganche de T8 toma el control de la velocidad; si
+       OFF, corre a la velocidad manual constante de T5). Al detener grabación, llama
+       `pausarScroll()`.
+    6. **Menú de configuración**: agrupar visualmente Modo voz, Play/Pausa manual, Reiniciar, abrir
+       editor y abrir ajustes dentro de un panel/menú secundario (puede reusar el patrón de panel
+       oculto de T6/T9), separado del botón grande principal.
+    7. **Velocidad por defecto más lenta**: bajar `VELOCIDAD_BASE_PX_S` (teleprompter.js) y/o el
+       rango `FACTOR_MINIMO_HABLANDO`/`FACTOR_MAXIMO_HABLANDO` (voz.js) para que el avance por voz
+       sea perceptiblemente más lento y legible por defecto — el usuario reportó que "la velocidad
+       es muy rápida, no alcanza a leer". Documentar los nuevos valores con un comentario.
+    8. **Texto lo más cerca posible de la cámara** dentro del layout actual de zonas apiladas
+       (sin superponerlas todavía — eso es diseño, va a Ideas/futuro): eliminar cualquier
+       separación/gap visual innecesario entre `#zona-camara` y `#zona-texto`.
+  - NO INCLUYE: superponer el texto sobre la visual de cámara, selección de cámara/lente
+    (frontal/trasera), preview en vivo de tipografía dentro del panel de ajustes, ni un control de
+    velocidad por defecto en el panel de ajustes — todo eso lo pidió el propio usuario para una
+    fase de diseño posterior; queda anotado en Ideas/futuro, no se toca aquí.
+- **Archivos**: `js/camara.js`, `js/voz.js`, `js/teleprompter.js`, `index.html`, `css/estilos.css`.
+- **Definición de Hecho**:
+  - [ ] Al cargar la app (cámara sin activar), todos los controles secundarios están visiblemente
+    deshabilitados; solo el botón grande "Activar cámara" es interactivo.
+  - [ ] Al tocar "Activar cámara" y conceder permiso, en el mismo flujo se habilitan todos los
+    controles secundarios Y se activa la detección de voz (sin un botón adicional) Y el botón
+    grande cambia a "Grabar".
+  - [ ] El teleprompter no se mueve ni un píxel hasta tocar "Grabar" — activar cámara, activar/
+    desactivar Modo voz, o cualquier otra interacción previa no debe iniciar el scroll.
+  - [ ] Tocar "Grabar" inicia la grabación Y el scroll simultáneamente; con Modo voz ON (default),
+    el avance sigue el ritmo de la voz; tocar "Detener" para ambos a la vez.
+  - [ ] Con Modo voz ON por defecto, hablar más lento que antes resulta en un avance perceptiblemente
+    más lento que el comportamiento previo a este ajuste (velocidad base reducida).
+  - [ ] Modo voz, Play/Pausa, Reiniciar, editor y ajustes están agrupados en un menú/panel
+    secundario, separados visualmente del botón grande de grabar.
+- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+
+---
+
 ## Bugs
 
 *Lo que el verificador o cualquiera encuentre fuera del alcance de la tarea en curso.
@@ -445,10 +502,19 @@ Nada se arregla "de pasada": se anota aquí y se prioriza.*
 
 | # | Bug | Detectado | Estado |
 |---|---|---|---|
-| 1 | Si se activa "Modo voz" (`#btn-modo-voz`) antes de activar la detección de voz (`#btn-activar-voz`), `iniciarScroll()` arranca pero el enganche de velocidad no se aplica (vive dentro del loop de detección, que aún no corre) — el scroll queda a la última velocidad conocida en vez de partir en 0. | T8 (2026-07-10) | Abierto — bajo impacto (orden de uso poco probable, botones están en el mismo panel), arreglar deshabilitando `#btn-modo-voz` hasta que la detección esté activa, o llamando `activarDeteccionVoz()` automáticamente desde `activarModoVoz()` si aún no corre. |
+| 1 | Si se activa "Modo voz" (`#btn-modo-voz`) antes de activar la detección de voz (`#btn-activar-voz`), `iniciarScroll()` arranca pero el enganche de velocidad no se aplica (vive dentro del loop de detección, que aún no corre) — el scroll queda a la última velocidad conocida en vez de partir en 0. | T8 (2026-07-10) | Resuelto por T12: se elimina el botón separado de activar voz (se fusiona con activar cámara) y se quita `iniciarScroll()` de `activarModoVoz()`, con lo que este escenario deja de ser posible. |
 
 ## Ideas / futuro (fuera de v1)
 
+- **Fase de diseño post-v1 (pedida explícitamente por el usuario tras probar en iPhone real)**:
+  - Superponer el texto del teleprompter sobre la visual de cámara (en vez de zonas apiladas),
+    explorando si Safari iOS lo permite bien; texto lo más cerca posible del lente de la cámara.
+  - Selector de cámara/lente (frontal/trasera) — relacionado con la idea ya existente de "cámara
+    trasera / alternar frontal-trasera" más abajo.
+  - En el panel de ajustes de tipografía (T9): una ventana de preview en vivo que muestre un texto
+    de muestra actualizándose en tiempo real mientras el usuario mueve los sliders de tamaño/color.
+  - Agregar al panel de ajustes un control de "velocidad por defecto" del teleprompter (además del
+    rango mínimo/máximo que ya escala con la voz).
 - Service worker para funcionamiento offline y cacheo de la app (la PWA de v1 solo cubre "agregar a
   pantalla de inicio", no offline).
 - Múltiples guiones guardados, con títulos y selección (v1 persiste uno solo).
