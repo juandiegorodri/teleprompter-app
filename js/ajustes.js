@@ -12,6 +12,7 @@ function obtenerElementos() {
   const inputTamanoFuente = document.getElementById("input-tamano-fuente");
   const inputColorTexto = document.getElementById("input-color-texto");
   const inputOpacidadFondo = document.getElementById("input-opacidad-fondo");
+  const inputProporcionCamara = document.getElementById("input-proporcion-camara");
   return {
     panel,
     botonAlternar,
@@ -19,7 +20,24 @@ function obtenerElementos() {
     inputTamanoFuente,
     inputColorTexto,
     inputOpacidadFondo,
+    inputProporcionCamara,
   };
+}
+
+/**
+ * T10: límites del reparto cámara/texto. --tp-proporcion-camara es el % del
+ * 85% disponible (zona-controles se mantiene fija en 15%) que ocupa la
+ * cámara; el resto lo ocupa el texto. Se acota para que, en los extremos,
+ * ninguna zona desaparezca: cámara nunca baja de 20% de la pantalla
+ * (20/0.85 ≈ 23.5 en la escala 0-100 del slider) ni texto de 15% de la
+ * pantalla (equivale a que la cámara no suba de (85-15)=70 en esa escala).
+ */
+const PROPORCION_CAMARA_MIN = 24; // ~20% de pantalla para la cámara
+const PROPORCION_CAMARA_MAX = 70; // deja ~15% de pantalla para el texto
+
+function acotarProporcionCamara(valor) {
+  if (Number.isNaN(valor)) return 60;
+  return Math.min(PROPORCION_CAMARA_MAX, Math.max(PROPORCION_CAMARA_MIN, valor));
 }
 
 function leerVariableCss(nombre) {
@@ -31,10 +49,12 @@ function obtenerAjustesPorDefecto() {
   const tamanoFuenteRem = parseFloat(leerVariableCss("--tp-font-size")) || 1.15;
   const colorTexto = leerVariableCss("--tp-color-texto") || "#ffffff";
   const opacidadFondo = parseFloat(leerVariableCss("--tp-opacidad-fondo"));
+  const proporcionCamara = parseFloat(leerVariableCss("--tp-proporcion-camara"));
   return {
     tamanoFuenteRem,
     colorTexto: colorAHex(colorTexto),
     opacidadFondo: Number.isNaN(opacidadFondo) ? 0.55 : opacidadFondo,
+    proporcionCamara: acotarProporcionCamara(proporcionCamara),
   };
 }
 
@@ -69,7 +89,12 @@ function cargarAjustesGuardados() {
       typeof datos.colorTexto === "string" &&
       typeof datos.opacidadFondo === "number"
     ) {
-      return datos;
+      return {
+        ...datos,
+        proporcionCamara: acotarProporcionCamara(
+          typeof datos.proporcionCamara === "number" ? datos.proporcionCamara : 60
+        ),
+      };
     }
     return null;
   } catch (error) {
@@ -90,13 +115,19 @@ function aplicarAjustes(ajustes) {
   RAIZ.style.setProperty("--tp-font-size", `${ajustes.tamanoFuenteRem}rem`);
   RAIZ.style.setProperty("--tp-color-texto", ajustes.colorTexto);
   RAIZ.style.setProperty("--tp-opacidad-fondo", String(ajustes.opacidadFondo));
+  RAIZ.style.setProperty(
+    "--tp-proporcion-camara",
+    String(acotarProporcionCamara(ajustes.proporcionCamara))
+  );
 }
 
 function sincronizarControles(elementos, ajustes) {
-  const { inputTamanoFuente, inputColorTexto, inputOpacidadFondo } = elementos;
+  const { inputTamanoFuente, inputColorTexto, inputOpacidadFondo, inputProporcionCamara } =
+    elementos;
   if (inputTamanoFuente) inputTamanoFuente.value = String(ajustes.tamanoFuenteRem);
   if (inputColorTexto) inputColorTexto.value = ajustes.colorTexto;
   if (inputOpacidadFondo) inputOpacidadFondo.value = String(ajustes.opacidadFondo);
+  if (inputProporcionCamara) inputProporcionCamara.value = String(ajustes.proporcionCamara);
 }
 
 function mostrarPanel(panel) {
@@ -127,6 +158,7 @@ function inicializarAjustes() {
     inputTamanoFuente,
     inputColorTexto,
     inputOpacidadFondo,
+    inputProporcionCamara,
   } = elementos;
 
   if (!panel) {
@@ -167,6 +199,11 @@ function inicializarAjustes() {
       opacidadFondo: inputOpacidadFondo
         ? parseFloat(inputOpacidadFondo.value)
         : ajustesIniciales.opacidadFondo,
+      proporcionCamara: acotarProporcionCamara(
+        inputProporcionCamara
+          ? parseFloat(inputProporcionCamara.value)
+          : ajustesIniciales.proporcionCamara
+      ),
     };
     aplicarAjustes(ajustes);
     guardarAjustes(ajustes);
@@ -188,6 +225,12 @@ function inicializarAjustes() {
     inputOpacidadFondo.addEventListener("input", actualizarYGuardar);
   } else {
     console.warn("ajustes: no se encontró #input-opacidad-fondo en el DOM");
+  }
+
+  if (inputProporcionCamara) {
+    inputProporcionCamara.addEventListener("input", actualizarYGuardar);
+  } else {
+    console.warn("ajustes: no se encontró #input-proporcion-camara en el DOM");
   }
 }
 

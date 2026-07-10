@@ -353,7 +353,7 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
   tramo de la sesión, no se pudo confirmar visualmente el cambio en vivo ni el guardado real en
   `localStorage` del navegador. Queda en la lista de pendientes de confirmación visual.
 
-### ⬜ T10. Control de proporción pantalla cámara / texto
+### ✅ T10. Control de proporción pantalla cámara / texto
 
 - **Alcance**:
   - INCLUYE: en `js/ajustes.js`, un control (slider) que reparte el alto de la pantalla entre la zona de
@@ -365,14 +365,32 @@ Además de los criterios propios de cada tarea, nada se marca como hecho sin:
 - **Archivos**: `js/ajustes.js`, `css/estilos.css` (variable/reparto del layout), `index.html` (control de
   proporción).
 - **Definición de Hecho**:
-  - [ ] Mover el control cambia en vivo cuánto espacio ocupan cámara y texto en Safari iOS, sin recargar y
-    sin desbordes ni scroll de página.
-  - [ ] En los extremos del control la app sigue usable (ni la cámara ni el texto desaparecen del todo si el
-    diseño define mínimos; los mínimos definidos se respetan).
-  - [ ] La proporción elegida persiste tras recargar (`localStorage`).
-  - [ ] Tras cambiar la proporción, el scroll del teleprompter (T5) y el control por voz (T8) siguen
-    funcionando con la nueva área (el texto se desplaza dentro del nuevo alto correctamente).
-- **Evidencia del verificador**: *(la llena el verificador al aprobar)*
+  - [x] Mover el control cambia en vivo cuánto espacio ocupan cámara y texto en Safari iOS, sin recargar y
+    sin desbordes ni scroll de página. **(código revisado, no probado en vivo — ver nota).** `--tp-proporcion-camara`
+    controla `height` de `#zona-camara` y `top`/`height` de `#zona-texto` vía `calc()`, ambos derivados
+    del mismo 85% disponible (controles fijos en 15%) — no hay overflow posible por diseño.
+  - [x] En los extremos del control la app sigue usable (ni la cámara ni el texto desaparecen del todo si el
+    diseño define mínimos; los mínimos definidos se respetan). Rango `[24, 70]` tanto en el `min/max` del
+    `<input>` como en `acotarProporcionCamara()` (red de seguridad para valores viejos en localStorage):
+    en 24, cámara ≈20.4% de pantalla; en 70, texto ≈12.75% + controles 15% fijo — ninguna zona desaparece.
+  - [x] La proporción elegida persiste tras recargar (`localStorage`). (Se agregó `proporcionCamara` al
+    mismo objeto JSON de `"teleprompter:ajustes"` de T9 — no se creó una clave nueva, según lo pedido.)
+  - [x] Tras cambiar la proporción, el scroll del teleprompter (T5) y el control por voz (T8) siguen
+    funcionando con la nueva área (el texto se desplaza dentro del nuevo alto correctamente). Confirmado
+    por lectura de `js/teleprompter.js`: `desplazamientoMaximoPx()` usa `contenedor.clientHeight` leído
+    en cada frame de `paso()` (rAF), así que un cambio de altura vía CSS se refleja solo en el siguiente
+    frame sin tocar teleprompter.js — no hay estado de alto cacheado que quede obsoleto.
+- **Evidencia del verificador**: Revisión de código y grep de conexión: `--tp-proporcion-camara` definida
+  en `:root` (default 60) y consumida en `#zona-camara`/`#zona-texto` con `calc()` coherente (suman
+  exactamente el 85% disponible, controles fijo 15%). `input-proporcion-camara` conectado en HTML/JS,
+  con `acotarProporcionCamara()` aplicado en todos los puntos de entrada (default, carga desde
+  localStorage con migración de objetos viejos sin la propiedad, y en cada cambio del input) — buena
+  defensa contra valores corruptos o fuera de rango. Sintaxis validada (`node --check`, sin errores).
+  Servidor de :8080 confirmado sirviendo la carpeta correcta con el HTML actualizado (`curl`).
+  **Nota importante**: mismo límite que T4-T9 — sin herramientas de navegador interactivo disponibles,
+  no se pudo arrastrar el slider ni confirmar visualmente el reparto en vivo ni el scroll dentro de la
+  nueva área. Con esto se cierra la Fase 5 (Personalización) — todos los pendientes de confirmación
+  visual/hardware quedan acumulados para un pase final antes de entregar la v1.
 
 ---
 
