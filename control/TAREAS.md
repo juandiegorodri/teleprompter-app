@@ -1513,7 +1513,7 @@ del ADR nativo en ARQUITECTURA.md):*
 
 ## Fase 21 — Primer feedback real de simulador: voz no detectada, espejo de video, reordenar ajustes
 
-### ⬜ T28. Arreglar detección de voz (audio vía AVCaptureSession, no AVAudioEngine separado), espejar grabación, mover preview de ajustes arriba de tipografía
+### ✅ T28. Arreglar detección de voz (audio vía AVCaptureSession, no AVAudioEngine separado), espejar grabación, mover preview de ajustes arriba de tipografía
 
 - **Alcance**:
   - INCLUYE:
@@ -1559,22 +1559,39 @@ del ADR nativo en ARQUITECTURA.md):*
   `ios/TelepromtCam/Camara/CamaraController.swift` (agrega `AVCaptureAudioDataOutput` a la sesión,
   espejo de video), `ios/TelepromtCam/Ajustes/PantallaAjustes.swift` (reordenar secciones).
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores, 0 warnings nuevos.
-  - [ ] Revisión de código: `VozController` ya NO crea su propio `AVAudioEngine`/`AVAudioSession`;
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores, 0 warnings nuevos.
+  - [x] Revisión de código: `VozController` ya NO crea su propio `AVAudioEngine`/`AVAudioSession`;
     consume audio vía `AVCaptureAudioDataOutput` agregado a `CamaraController.session`; el cálculo
     de RMS opera sobre los datos del `CMSampleBuffer` correctamente extraídos; histéresis/remapeo/
     suavizado/enganche a `setVelocidad` se conservan sin cambios de lógica.
-  - [ ] Revisión de código: `isVideoMirrored` se aplica `true` para cámara frontal y `false` para
+  - [x] Revisión de código: `isVideoMirrored` se aplica `true` para cámara frontal y `false` para
     trasera, verificando `isVideoMirroringSupported` antes, tanto en la configuración inicial como
     en `cambiarLente(a:)`.
-  - [ ] `PantallaAjustes.swift`: la sección del preview aparece antes que "Tipografía" en el orden
+  - [x] `PantallaAjustes.swift`: la sección del preview aparece antes que "Tipografía" en el orden
     del `Form` (verificable leyendo el orden de las `Section` en el código).
   - [ ] Prueba funcional (que el texto ahora sí siga la voz real, que el video grabado salga
     espejado como el preview, que el preview de ajustes se vea arriba): **la hace el usuario** —
     esta vez en simulador con micrófono/cámara del Mac (ya confirmó que el simulador SÍ tiene
     acceso a cámara/mic reales del equipo), así que a diferencia de tareas anteriores, esta SÍ es
     razonable pedir que se confirme rápido tras el próximo build.
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`,
+  0 errores, sin warnings nuevos. Diagnóstico confirmado como correcto: la causa raíz real del bug
+  era la arquitectura de dos consumidores de audio compitiendo (`AVAudioEngine` propio vs.
+  `AVCaptureSession` ya activa) — la solución de unificar la fuente vía `AVCaptureAudioDataOutput`
+  en la MISMA sesión es el patrón estándar de iOS para este caso exacto, no un parche. Revisé
+  `calcularRMS` línea por línea: detecta dinámicamente si el formato es Float32 o entero (16/32
+  bits) leyendo el `CMAudioFormatDescription` real del buffer, en vez de asumir un formato fijo —
+  decisión más robusta que forzar Float32 (que de todas formas no se puede en iOS, confirmado por
+  el constructor: `audioSettings` es `API_UNAVAILABLE` fuera de macOS). Confirmé por diff conceptual
+  que `procesarNivel`, `remapearNivelAFraccion`, los umbrales y el suavizado son idénticos a T22 —
+  ningún cambio de lógica, solo de fuente. El delegate despacha a `DispatchQueue.main.async` antes
+  de tocar estado `@Observable`, igual que antes. `isVideoMirrored` confirmado en ambos puntos
+  (`aplicarEspejadoVideo()` llamado tras configuración inicial y tras `cambiarLente`). Orden de
+  secciones en `PantallaAjustes.swift` confirmado por grep: Cámara → (preview sin título) →
+  Tipografía → Fondo del texto → Velocidad. **Nota importante**: a diferencia de toda tarea anterior,
+  esta sí es razonable esperar que el usuario la confirme rápido, porque reportó que su simulador
+  SÍ tiene acceso a cámara/mic reales del Mac — es la primera vez en el proyecto nativo que hay
+  hardware real disponible para probar. Con esto se cierra la Fase 21.
 
 ---
 

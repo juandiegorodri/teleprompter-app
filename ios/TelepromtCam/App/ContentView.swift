@@ -65,7 +65,7 @@ struct ContentView: View {
                             // la sesión de cámara queda activa. El
                             // teleprompter YA NO arranca aquí (T24, punto 3):
                             // solo se mueve cuando se toca "Grabar".
-                            voz.iniciar()
+                            voz.iniciar(audioDataOutput: camara.audioDataOutput)
                         }
                         .onDisappear { voz.detener() }
                 }

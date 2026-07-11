@@ -48,6 +48,12 @@ struct PantallaAjustes: View {
                 }
             }
 
+            Section {
+                PreviewAjustes(ajustes: ajustes)
+                    .listRowInsets(EdgeInsets())
+                    .padding()
+            }
+
             Section("Tipografía") {
                 VStack(alignment: .leading) {
                     Text("Tamaño de fuente: \(Int(ajustes.tamanoFuente)) pt")
@@ -81,12 +87,6 @@ struct PantallaAjustes: View {
                         in: AjustesStore.rangoVelocidadBase
                     )
                 }
-            }
-
-            Section {
-                PreviewAjustes(ajustes: ajustes)
-                    .listRowInsets(EdgeInsets())
-                    .padding()
             }
 
             if let errorGrabacion = camaraController.errorGrabacion {

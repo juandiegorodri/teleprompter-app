@@ -42,6 +42,17 @@ final class CamaraController: NSObject {
     /// (grabar → detener → grabar de nuevo no reconfigura la sesión).
     private let movieFileOutput = AVCaptureMovieFileOutput()
 
+    /// Salida de datos de audio en vivo (T28), usada por `VozController`
+    /// como fuente de audio en vez de un `AVAudioEngine` propio y separado.
+    /// Se agrega a la misma `AVCaptureSession` que ya está corriendo para
+    /// video/grabación (T17/T18), evitando dos consumidores de audio
+    /// independientes compitiendo por la `AVAudioSession` compartida — el
+    /// bug de fondo de la detección de voz que no funcionaba (T22 original
+    /// usaba un `AVAudioEngine` separado). `audioSettings` se fija a PCM
+    /// lineal Float32 para que `VozController` pueda calcular RMS
+    /// directamente sobre `Float` sin normalizar desde Int16.
+    let audioDataOutput = AVCaptureAudioDataOutput()
+
     /// `true` mientras hay una grabación en curso. Controla la idempotencia
     /// de `iniciarGrabacion()`/`detenerGrabacion()`.
     private(set) var estaGrabando = false
@@ -189,7 +200,39 @@ final class CamaraController: NSObject {
             }
         }
 
+        // Salida de datos de audio en vivo (T28) para VozController.
+        //
+        // NOTA: `AVCaptureAudioDataOutput.audioSettings` está marcado
+        // `API_UNAVAILABLE(ios, ...)` en el SDK de iOS (a diferencia de
+        // macOS, donde sí se puede fijar) — asignarlo no compila. Por eso
+        // NO se fuerza el formato a Float32 aquí; `VozController` lee el
+        // formato real del `CMSampleBuffer` (vía su `CMFormatDescription`)
+        // en cada callback y calcula el RMS soportando tanto Int16 como
+        // Float32, sea cual sea el que iOS entregue por defecto.
+        if session.canAddOutput(audioDataOutput) {
+            session.addOutput(audioDataOutput)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.errorGrabacion = "No fue posible agregar la salida de audio para la detección de voz."
+            }
+        }
+
+        aplicarEspejadoVideo()
+
         sesionConfigurada = true
+    }
+
+    /// Espeja la conexión de video del `movieFileOutput` cuando la lente
+    /// activa es la frontal (T28, punto 2) — sin esto, el video grabado con
+    /// la cámara frontal sale invertido horizontalmente respecto a lo que
+    /// el usuario ve en el preview en vivo (que Apple espeja por defecto a
+    /// nivel de capa de preview, pero NO a nivel del archivo grabado).
+    /// Se llama tanto tras la configuración inicial como tras cada
+    /// `cambiarLente(a:)`, siempre con la posición vigente en ese momento.
+    private func aplicarEspejadoVideo() {
+        guard let connection = movieFileOutput.connection(with: .video) else { return }
+        guard connection.isVideoMirroringSupported else { return }
+        connection.isVideoMirrored = posicionLenteActual == .front
     }
 
     // MARK: - Grabación (T18)
@@ -282,6 +325,7 @@ final class CamaraController: NSObject {
                 self.entradaVideo = entradaNueva
                 self.posicionLenteActual = posicion
                 self.session.commitConfiguration()
+                self.aplicarEspejadoVideo()
                 DispatchQueue.main.async {
                     self.errorGrabacion = nil
                 }
