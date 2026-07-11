@@ -17,23 +17,24 @@ cuadra con la realidad, toca pasada anti-deriva.*
 | js/editor.js | Editor del guion (crear/editar texto), guardado en `localStorage` | constructor |
 | js/ajustes.js | Controles de tipografía (tamaño/color), fondo del texto (opaco/translúcido), proporción cámara/texto | constructor |
 
-## App nativa iOS (planeado — Fases 11-20, T16-T27, se confirma tarea por tarea)
+## App nativa iOS (COMPLETA — T16-T27, ver TAREAS.md para el detalle de cada tarea)
 
 *Proyecto Xcode independiente en `ios/`, sin código compartido con la web app — ver ADR en
-ARQUITECTURA.md. Bundle id `com.juandiegorodri.teleprompter`, nombre App Store "TelepromtCam".*
+ARQUITECTURA.md. Bundle id `com.juandiegorodri.teleprompter`, nombre App Store "TelepromtCam".
+Build verificado con `xcodebuild ... build` → `** BUILD SUCCEEDED **`.*
 
 | Ruta | Qué es / qué contiene | Rol que la toca |
 |---|---|---|
-| ios/TelepromtCam.xcodeproj/ | Proyecto Xcode, grupo sincronizado con el sistema de archivos | constructor |
-| ios/TelepromtCam/App/ | `TelepromtCamApp.swift` (@main), `Info.plist` (usage strings), `Assets.xcassets` (icono, color de acento) | constructor |
-| ios/TelepromtCam/Camara/ | AVCaptureSession, preview, selección de lente, grabación con AVCaptureMovieFileOutput | constructor |
-| ios/TelepromtCam/Voz/ | AVAudioEngine, VAD por energía RMS, enganche a velocidad del teleprompter | constructor |
-| ios/TelepromtCam/Teleprompter/ | Overlay de texto sobre cámara, scroll con velocidad configurable | constructor |
-| ios/TelepromtCam/Editor/ | Editor de guion con persistencia | constructor |
-| ios/TelepromtCam/Ajustes/ | Pantalla de configuración: calidad de cámara, fps, lente, tipografía, velocidad; persistencia UserDefaults | constructor |
-| ios/TelepromtCam/Comun/ | Utilidades compartidas entre módulos nativos | constructor |
-| ios/AppStore/ | Assets de App Store (icon set, metadata.md, política de privacidad) — llega en T25/T26 | constructor |
-| privacidad.html (raíz del repo) | Página de privacidad/soporte servida vía GitHub Pages, referenciada desde App Store Connect | constructor |
+| ios/TelepromtCam.xcodeproj/ | Proyecto Xcode, grupo sincronizado con el sistema de archivos (agregar `.swift` no requiere editar el pbxproj, salvo `App/Info.plist` que está excepcionado — ver ARQUITECTURA.md) | constructor |
+| ios/TelepromtCam/App/ | `TelepromtCamApp.swift` (@main), `ContentView.swift` (compone cámara+overlay+controles+modal), `Info.plist` físico (usage strings + UILaunchScreen), `Assets.xcassets` (AppIcon single-size 1024, AccentColor) | constructor |
+| ios/TelepromtCam/Camara/ | `CamaraController.swift`: AVCaptureSession, permisos runtime, preview (`PreviewCamara.swift`), cambio de lente, grabación con AVCaptureMovieFileOutput, aplicar calidad/fps validados; `ModalResultado.swift`: modal obligatorio Guardar en Fotos/Descartar | constructor |
+| ios/TelepromtCam/Voz/ | `VozController.swift`: AVAudioEngine, VAD por energía RMS con histéresis, remapeo de rango antes de calcular factor (lección de T14 web aplicada), enganche a velocidad del teleprompter | constructor |
+| ios/TelepromtCam/Teleprompter/ | `TeleprompterController.swift`: scroll por delta de tiempo real (TimelineView); `OverlayTeleprompter.swift`: overlay de texto sobre la franja superior de la cámara | constructor |
+| ios/TelepromtCam/Editor/ | `PantallaEditor.swift` + `GuionStore.swift`: editor de guion con persistencia en UserDefaults | constructor |
+| ios/TelepromtCam/Ajustes/ | `AjustesStore.swift` (modelo+persistencia), `CalidadCamara.swift`/`FPS.swift` (enums), `PantallaAjustes.swift` (UI: calidad/fps/lente/tipografía/velocidad), `PreviewAjustes.swift` (preview en vivo aislado) | constructor |
+| ios/TelepromtCam/Comun/ | `GuardadoFotos.swift`: wrapper de PHPhotoLibrary (solo escritura) | constructor |
+| ios/AppStore/ | `icono-master-1024.png`, `metadata.md`, `politica-privacidad.md`, `resumen-privacidad-apple.md`, `revision-appstore.md` (informe del evaluador T27) | constructor |
+| privacidad.html (raíz del repo) | Página de política de privacidad servida vía GitHub Pages, enlazada desde App Store Connect | constructor |
 
 ## Control y configuración
 

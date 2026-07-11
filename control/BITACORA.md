@@ -4,6 +4,20 @@
 10 líneas cada una. NO se lee al arrancar sesión (para eso está ESTADO.md) — se consulta solo
 para responder "¿por qué se hizo así?" o "¿cuándo pasó X?".*
 
+## 2026-07-10 — app nativa iOS completa (T16-T27): TelepromtCam lista para Xcode/App Store
+
+- **Hecho**: pivote pedido por el usuario tras problemas de calidad de cámara en la web. Plan
+  completo (12 fases del arquitecto) ejecutado de punta a punta: proyecto Xcode, cámara nativa
+  (calidad/fps/lente configurables), teleprompter superpuesto, voz por AVAudioEngine, editor, flujo
+  de grabación con modal Guardar en Fotos/Descartar, ícono+launch screen, metadata de App Store +
+  privacidad, y auditoría final (T27) sin hallazgos de falla.
+- **Decidido**: SwiftUI + AVFoundation nativo (no WKWebView wrapper), proyecto en `ios/` del mismo
+  repo, bundle id `com.juandiegorodri.teleprompter`, nombre "TelepromtCam". Grupo sincronizado con
+  el sistema de archivos en el pbxproj (agregar `.swift` no requiere tocarlo). Aplicada
+  explícitamente la lección del bug de mapeo nivel→factor de voz que se cometió en la web (T14).
+- **Pendiente**: TODO el camino con hardware real (cámara/mic/Fotos, calibración de voz) — el
+  usuario debe abrir el proyecto en Xcode y seguir la checklist final de TAREAS.md hasta publicar.
+
 ## 2026-07-10 — v1 implementada completa (T1-T11)
 
 - **Hecho**: las 11 tareas del plan implementadas (esqueleto, cámara, grabación, teleprompter con

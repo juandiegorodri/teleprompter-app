@@ -5,21 +5,27 @@ Máximo 60 líneas. Si la conversación se borrara, este archivo tiene que basta
 
 ## Ahora mismo
 
-- **En curso**: ninguna — T1-T15b implementadas (T15a fue un fix directo de una línea, sin pasar
-  por el enjambre). Cuarta ronda de feedback real del usuario: velocidad máxima insuficiente,
-  grabación que se corta a los ~20s (video se congela, audio sigue), indicador de "grabando" activo
-  sin grabar (arreglado directo), y calidad de cámara percibida como baja.
-- **Siguiente paso concreto**: pedirle al usuario que abra
-  https://juandiegorodri.github.io/teleprompter-app/ en su iPhone y confirme, en este orden de
-  importancia: (1) si el indicador de grabando YA solo aparece grabando de verdad, (2) si grabar
-  un video de más de 20-30 segundos ya NO se corta (la mitigación — timeslice + Screen Wake Lock —
-  es la mejor posible sin poder reproducir el bug en este entorno; si persiste, el problema puede
-  no ser de las dos causas asumidas y necesita más investigación dirigida), (3) si la velocidad
-  máxima del slider ahora alcanza a sentirse "rápida" de verdad, (4) si la calidad de imagen mejoró
-  con la resolución más alta pedida (aclarar al usuario que nunca va a igualar 100% la app nativa
-  de Cámara — eso es una limitación de la Web API, no algo arreglable desde aquí).
-- **Tareas cerradas desde la última limpieza**: 16 *(MUY atrasada — la pasada anti-deriva viene
-  posponiéndose desde T11; hacerla en la próxima sesión sin más rondas de features encima)*
+- **En curso**: ninguna. Dos productos completos en este repo:
+  1. **Web app** (T1-T15b): publicada en GitHub Pages, con 4 rondas de feedback real del usuario
+     ya incorporadas. Bug pendiente sin confirmar resuelto: corte de grabación a los ~20s (mitigado
+     con timeslice+WakeLock, no confirmado por el usuario).
+  2. **App nativa iOS "TelepromtCam"** (T16-T27, Fases 11-20): recién completada de punta a punta
+     en esta misma sesión — SwiftUI + AVFoundation, cámara con calidad/fps/lente configurables,
+     teleprompter superpuesto con scroll por delta de tiempo, voz por AVAudioEngine (con la lección
+     del bug de mapeo nivel→factor de la web aplicada desde el diseño), editor, flujo de grabación
+     con modal Guardar en Fotos/Descartar, ícono + launch screen, metadata completa de App Store
+     Connect + política de privacidad, y una auditoría final (T27) contra las Apple App Review
+     Guidelines — sin hallazgos de falla. Compila limpio (`xcodebuild` → `BUILD SUCCEEDED`, 0
+     warnings) y arranca sin crash en simulador (smoke-launch confirmado).
+- **Siguiente paso concreto**: el usuario debe abrir `ios/TelepromtCam.xcodeproj` en Xcode y seguir
+  la "Checklist final — lo que le queda al USUARIO" al final de TAREAS.md (8 pasos: signing con su
+  Team ID, probar en simulador/iPhone real, crear la app en App Store Connect con `ios/AppStore/
+  metadata.md`, screenshots, cuestionario de privacidad con `resumen-privacidad-apple.md`, archivar
+  y subir el build, enviar a revisión). Es MUY probable que la calibración de voz (T22) necesite un
+  ajuste tras la primera prueba real, igual que pasó en la web (dos rondas de calibración).
+- **Tareas cerradas desde la última limpieza**: 27 en total (16 de la web + 11 de iOS desde la
+  última limpieza, que nunca se hizo) — **la pasada anti-deriva está MUY atrasada**, debe ser el
+  siguiente foco de trabajo si no hay más features pedidas.
 
 ## Qué funciona (verificado por el verificador)
 
@@ -28,34 +34,32 @@ logros vive en las tareas cerradas de TAREAS.md con su evidencia — esas no se 
 
 | Funcionalidad | Verificada | Cómo se probó |
 |---|---|---|
-| Cámara, grabación y descarga del video | 2026-07-10 | **CONFIRMADO POR EL USUARIO en iPhone real** (con el bug de corte a los ~20s, en investigación) |
-| Flujo T12 (cámara habilita todo, botón grande grabar, config agrupada) | 2026-07-10 | **CONFIRMADO POR EL USUARIO** |
-| T13 (texto superpuesto, preview en vivo, velocidad/lente configurables) | 2026-07-10 | Revisión de código — nunca confirmado explícitamente por el usuario, asumir pendiente |
-| Publicación en GitHub Pages | 2026-07-10 | Se actualiza en cada push, confirmado repetidamente |
-| Indicador de "grabando" solo visible al grabar (T15a) | 2026-07-10 | Bug de especificidad CSS encontrado y arreglado directo — no confirmado aún por el usuario |
-| T14 (voz recalibrada, modal obligatorio, indicador rojo) | 2026-07-10 | El usuario probó y reportó 4 problemas nuevos (T15a/T15b) — no confirmó explícitamente si el modal/voz de T14 ya estaban bien |
-| T15b (velocidad hasta 100px/s, timeslice+WakeLock para el corte, resolución 1080p) | 2026-07-10 | Revisión de código — PENDIENTE de que el usuario lo pruebe, en particular el corte de grabación |
+| Web app: cámara, grabación, descarga | 2026-07-10 | **CONFIRMADO POR EL USUARIO en iPhone real** (bug de corte ~20s en investigación) |
+| Web app: flujo simplificado + voz + diseño (T12/T13) | 2026-07-10 | **CONFIRMADO POR EL USUARIO** |
+| Web app: publicación en GitHub Pages | 2026-07-10 | Se actualiza en cada push, confirmado repetidamente |
+| iOS nativo: proyecto Xcode completo compila | 2026-07-10 | `xcodebuild` → `BUILD SUCCEEDED`, 0 warnings, re-verificado independientemente en CADA tarea T16-T27 |
+| iOS nativo: arranca sin crash en simulador | 2026-07-10 | `simctl install`+`launch`, PID vivo confirmado — NO probado con cámara/mic reales (simulador no tiene) |
+| iOS nativo: auditoría App Store Review (T27) | 2026-07-10 | Informe completo en `ios/AppStore/revision-appstore.md`, 6/6 bloques PASA, sin hallazgos de falla |
 
 ## Bloqueos y decisiones pendientes
 
-- **Pendiente de reconfirmación en iPhone real**: T13, T14 y T15 completas — el usuario viene
-  reportando problemas nuevos antes de confirmar explícitamente que los anteriores ya funcionan.
-  Conviene, en la próxima ronda, pedirle una confirmación explícita punto por punto en vez de
-  asumir que lo no mencionado ya está bien.
-- **Riesgo conocido — el más importante ahora mismo**: el corte de grabación a los ~20s es un bug
-  serio (se pierde video) mitigado pero NO confirmado como resuelto. Si persiste tras T15b, elegir
-  otra hipótesis (ej. límite de memoria de MediaRecorder en Safari con timeslice corto, o un
-  problema del propio `getUserMedia`/`videoBitsPerSecond` sin especificar) y pedir al usuario un
-  dato más específico (ej. duración exacta donde se corta, si varía).
-- **Toca pasada anti-deriva** (16 tareas cerradas, MUY atrasada desde T11): debe hacerse apenas la
-  app deje de recibir bugs nuevos — MAPA.md especialmente desalineado desde T13.
-- Túnel de localtunnel ya no es necesario — GitHub Pages es la URL estable de prueba/entrega.
+- **Web app**: corte de grabación a los ~20s sin confirmar resuelto (T15b lo mitigó, no está
+  probado). T13/T14 tampoco tuvieron confirmación explícita del usuario antes de que llegara
+  feedback nuevo.
+- **iOS nativo**: TODO el camino feliz con hardware real (cámara, mic, guardar en Fotos, y sobre
+  todo la calibración de voz de T22) está sin confirmar — este entorno no tiene cámara/mic físicos
+  ni puede correr GUI interactiva de Xcode. Es el paso inmediato que le toca al usuario.
+- **Pasada anti-deriva MUY atrasada** (27 tareas cerradas sin hacerla nunca): próxima sesión,
+  revisar código muerto, duplicados, y confirmar que MAPA.md (recién actualizado con la sección
+  iOS) sigue cuadrando con la realidad tras el uso real del usuario.
+- Dos productos en un solo repo (web en raíz + iOS en `ios/`) sin código compartido — intencional,
+  documentado en el ADR de ARQUITECTURA.md.
 
 ## Última sesión
 
-2026-07-10 — sesión muy larga: instalación + plan (11 tareas) + T1-T11 + GitHub Pages + 4 rondas
-de prueba real del usuario en iPhone, cada una generando tareas de ajuste (T12 flujo simplificado,
-T13 diseño/texto sobre cámara, T14 voz+modal+indicador, T15a/T15b velocidad+corte de
-grabación+calidad). Patrón establecido: usuario prueba → reporta → tarea con DoD → constructor
-implementa → verificación por código (sin cámara/mic reales) → push → usuario prueba de nuevo.
-Bug más serio pendiente de confirmar resuelto: corte de grabación a los ~20s.
+2026-07-10 — sesión extremadamente larga: instalación del sistema + v1 web completa (T1-T11) +
+GitHub Pages + 4 rondas de feedback real en iPhone (T12-T15b) + pivote a app nativa iOS pedido por
+el usuario tras problemas de calidad/control de cámara en la web + plan completo (T16-T27) +
+ejecución completa de la app nativa en la misma sesión, incluyendo assets de App Store, metadata,
+política de privacidad, y auditoría final del "evaluador" (T27) sin hallazgos de falla. Todo
+publicado en GitHub. Quedan dos productos listos para que el usuario los pruebe/entregue.

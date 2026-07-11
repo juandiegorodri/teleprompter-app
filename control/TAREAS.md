@@ -1420,7 +1420,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 20 — Evaluación contra las App Store Review Guidelines (tarea dedicada del "evaluador")
 
-### ⬜ T27. Auditoría de App Store Review Guidelines sobre el proyecto completo
+### ✅ T27. Auditoría de App Store Review Guidelines sobre el proyecto completo
 
 - **Alcance** *(esta es la tarea que el usuario pidió explícitamente: "corre también un evaluador".
   La ejecuta el rol VERIFICADOR del enjambre, pero como una tarea dedicada al final de la fase, no
@@ -1451,14 +1451,26 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 - **Archivos**: `ios/AppStore/revision-appstore.md` (informe). No modifica código (los arreglos que
   surjan se anotan y se vuelven tareas).
 - **Definición de Hecho**:
-  - [ ] El informe cubre los 6 bloques anteriores con un veredicto por cada uno (pasa/riesgo/falla) y
+  - [x] El informe cubre los 6 bloques anteriores con un veredicto por cada uno (pasa/riesgo/falla) y
     evidencia (rutas de archivo, líneas, resultado de `xcodebuild`/`simctl`).
-  - [ ] Cruce permisos↔uso hecho explícito: tabla de cada usage string ↔ dónde se usa en el código (o
+  - [x] Cruce permisos↔uso hecho explícito: tabla de cada usage string ↔ dónde se usa en el código (o
     marcado como "declarado no usado" = quitar, para no arriesgar 5.1.1).
-  - [ ] Si hay hallazgos de "falla", cada uno tiene una acción concreta anotada (tarea de corrección);
+  - [x] Si hay hallazgos de "falla", cada uno tiene una acción concreta anotada (tarea de corrección);
     si no hay ninguno, se afirma explícitamente que no se encontraron bloqueadores de rechazo común.
-  - [ ] La decisión final de enviar a revisión y el juicio de Apple: **quedan del lado del usuario**.
-- **Evidencia del verificador**: *(pendiente)*
+  - [x] La decisión final de enviar a revisión y el juicio de Apple: **quedan del lado del usuario**.
+- **Evidencia del verificador**: Informe completo escrito en `ios/AppStore/revision-appstore.md`,
+  cubriendo los 6 bloques con veredicto PASA en todos, respaldado por evidencia real re-verificada
+  en esta misma auditoría (no solo reciclando resultados de tareas anteriores): `xcodebuild` limpio
+  (0 errores, 0 warnings), smoke-launch real en simulador con PID confirmado vivo, tabla de cruce
+  permisos↔uso con los 3 usage strings de Info.plist mapeados a su uso real en el código (sin
+  huérfanos en ninguna dirección), grep confirmando ausencia de placeholders/TODOs/lorem, ausencia
+  de `URLSession`/`URLRequest`/`WKWebView` en todo el proyecto (respalda tanto la política de
+  privacidad como el no-rechazo por Guideline 4.2), y revisión de los 5 puntos clásicos de crash de
+  AVFoundation confirmando que todos están defendidos por el código de T17/T18/T20/T24. No se
+  encontraron hallazgos de "falla" — no hay tareas de corrección pendientes. Riesgos residuales
+  (calibración de voz, camino feliz de cámara/Fotos) documentados como límites inherentes de no
+  tener hardware real, no como fallas de la auditoría. Con esto se cierra la Fase 20 y el plan
+  completo de la app nativa iOS (T16-T27).
 
 ---
 
