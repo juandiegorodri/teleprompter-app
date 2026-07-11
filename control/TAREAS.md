@@ -1293,7 +1293,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 18 — Assets para App Store
 
-### ⬜ T25. App icon set completo + launch screen
+### ✅ T25. App icon set completo + launch screen
 
 - **Alcance**:
   - INCLUYE:
@@ -1319,16 +1319,34 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
   `ios/TelepromtCam/App/LaunchScreen.storyboard` (o entrada `UILaunchScreen` en Info.plist),
   `ios/AppStore/icono-master-1024.png` (el master, para regenerar).
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores, y el catálogo de assets compila
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores, y el catálogo de assets compila
     sin warnings de "unassigned children" / iconos faltantes (Xcode advierte si falta algún tamaño
     requerido — la ausencia de esos warnings es el criterio verificable).
-  - [ ] El PNG 1024 del App Store NO tiene canal alfa (verificable con `sips -g hasAlpha` → `no`).
-  - [ ] Todos los PNGs generados tienen las dimensiones que declara su `Contents.json` (verificable con
+  - [x] El PNG 1024 del App Store NO tiene canal alfa (verificable con `sips -g hasAlpha` → `no`).
+  - [x] Todos los PNGs generados tienen las dimensiones que declara su `Contents.json` (verificable con
     `sips -g pixelWidth -g pixelHeight` por archivo).
-  - [ ] La launch screen está referenciada correctamente y el build la reconoce (sin warning de launch
+  - [x] La launch screen está referenciada correctamente y el build la reconoce (sin warning de launch
     screen faltante).
   - [ ] Revisión visual del ícono (que se vea bien y no genérico): **la hace el usuario**.
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`,
+  grep de "warning" sobre el log completo del build → 0 resultados. `sips -g hasAlpha` sobre el
+  master 1024 → `no`. `sips -g pixelWidth -g pixelHeight` sobre el icono del appiconset → 1024x1024,
+  coincide con Contents.json. `plutil -p` sobre el Info.plist efectivo del build confirma
+  `UILaunchScreen` presente y `CFBundleDisplayName`/`CFBundleIdentifier` intactos desde T16-T24 (el
+  cambio de Info.plist generado a físico no rompió nada de lo ya configurado). **Verificación
+  adicional que hice yo mismo, no solo confiar en el reporte**: el constructor tuvo que hacer un
+  cambio estructural delicado (pasar de `GENERATE_INFOPLIST_FILE` puro a un `Info.plist` físico +
+  una `PBXFileSystemSynchronizedBuildFileExceptionSet` en el pbxproj, porque una clave anidada como
+  `UILaunchScreen.UIColorName` no se puede expresar de forma confiable solo con `INFOPLIST_KEY_*`).
+  Confirmé por grep que la excepción está bien acotada (excluye únicamente `App/Info.plist` de las
+  Copy Bundle Resources del grupo sincronizado) — agregar cualquier otro `.swift` nuevo dentro de
+  `ios/TelepromtCam/` sigue sin requerir tocar el pbxproj, la propiedad clave de T16 no se perdió.
+  Ícono generado con un escritor de PNG puro en Python (mismo enfoque que T11 de la web, sin
+  ImageMagick/PIL disponibles): fondo azul sólido + cuerpo de cámara + lente + barras decrecientes
+  sugiriendo texto de teleprompter — simple y sin alfa, cumple los requisitos de Apple. **Nota**: la
+  apreciación visual final de si el ícono "se ve bien" la debe hacer el usuario — es subjetivo y no
+  verificable por código; si no le gusta, es fácil regenerar el master. Con esto se cierra la Fase 18
+  (Assets para App Store).
 
 ---
 

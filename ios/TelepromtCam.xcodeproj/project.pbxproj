@@ -10,9 +10,22 @@
 		35333B936E3E694E9C596EAD /* TelepromtCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TelepromtCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A11CE55E5A9F41A8B6D5A101 /* Exceptions for "TelepromtCam" folder in "TelepromtCam" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				App/Info.plist,
+			);
+			target = 567D8BDAEAEF4E86876FD86B /* TelepromtCam */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		0655563BD2533A885E2F483E /* TelepromtCam */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A11CE55E5A9F41A8B6D5A101 /* Exceptions for "TelepromtCam" folder in "TelepromtCam" target */,
+			);
 			path = TelepromtCam;
 			sourceTree = "<group>";
 		};
@@ -249,14 +262,7 @@
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = TelepromtCam;
-				INFOPLIST_KEY_NSCameraUsageDescription = "TelepromtCam usa la cámara para grabar tu video mientras lees el guion del teleprompter.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TelepromtCam usa el micrófono para grabar el audio de tu video y para ajustar la velocidad del texto según tu voz.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "TelepromtCam guarda los videos que grabas en tu carrete de Fotos.";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_FILE = TelepromtCam/App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.juandiegorodri.teleprompter;
@@ -277,14 +283,7 @@
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = TelepromtCam;
-				INFOPLIST_KEY_NSCameraUsageDescription = "TelepromtCam usa la cámara para grabar tu video mientras lees el guion del teleprompter.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TelepromtCam usa el micrófono para grabar el audio de tu video y para ajustar la velocidad del texto según tu voz.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "TelepromtCam guarda los videos que grabas en tu carrete de Fotos.";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_FILE = TelepromtCam/App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.juandiegorodri.teleprompter;
