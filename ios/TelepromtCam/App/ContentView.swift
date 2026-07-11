@@ -58,16 +58,33 @@ struct ContentView: View {
                     OverlayTeleprompter(ajustes: ajustes, controlador: teleprompter)
                         .padding(.horizontal, 8)
                         .onAppear {
-                            // Mismo gesto de usuario que activó la cámara
-                            // (el permiso de micrófono ya se concedió junto
-                            // con el de video en `solicitarPermisosYActivar`)
-                            // — arranca la detección de voz (T22) en cuanto
-                            // la sesión de cámara queda activa. El
-                            // teleprompter YA NO arranca aquí (T24, punto 3):
-                            // solo se mueve cuando se toca "Grabar".
-                            voz.iniciar(audioDataOutput: camara.audioDataOutput)
+                            // Wiring T29: `CamaraController` es el delegate del
+                            // `AVCaptureAudioDataOutput` (necesita los buffers
+                            // para escribir la pista de audio del
+                            // `AVAssetWriter`) y le reenvía cada buffer de audio
+                            // a `VozController.procesarSampleBuffer(_:)`. Aquí
+                            // se conecta esa referencia (weak en CamaraController
+                            // para no crear ciclo) y se activa el VAD. El
+                            // permiso de micrófono ya se concedió junto con el
+                            // de video en `solicitarPermisosYActivar`. El
+                            // teleprompter NO arranca aquí: solo con "Grabar".
+                            camara.vozController = voz
+                            voz.iniciar()
                         }
                         .onDisappear { voz.detener() }
+                }
+
+                // Medidor de nivel de micrófono (T29 punto 3): barra fina que
+                // muestra `voz.nivel` en tiempo real mientras la cámara está
+                // activa. El RMS crudo es pequeño (~0.0–0.15), así que se
+                // escala ×6 y se clampa a 1 para que sea visible. Es la
+                // herramienta de observabilidad que convierte "no funciona, no
+                // sé por qué" en "la barra se mueve / no se mueve" y permite
+                // calibrar los umbrales contra datos reales.
+                if camara.sesionActiva {
+                    MedidorNivel(nivel: voz.nivel)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 4)
                 }
 
                 Spacer()
@@ -184,10 +201,10 @@ struct ContentView: View {
             }
         }
         // El teleprompter se pausa tanto si el usuario tocó "Detener" como
-        // si el delegate de `AVCaptureFileOutputRecordingDelegate` completó
-        // la grabación por su cuenta (T24, punto 3) — ambos caminos
-        // terminan poniendo `estaGrabando = false`, así que un solo
-        // `onChange` cubre los dos casos sin duplicar la llamada.
+        // si el `AVAssetWriter` terminó `finishWriting` por su cuenta (T24
+        // punto 3 / T29) — ambos caminos terminan poniendo
+        // `estaGrabando = false`, así que un solo `onChange` cubre los dos
+        // casos sin duplicar la llamada.
         .onChange(of: camara.estaGrabando) { _, estaGrabandoAhora in
             if !estaGrabandoAhora {
                 teleprompter.pausar()
@@ -247,6 +264,41 @@ struct ContentView: View {
     private func abrirAjustes() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
+    }
+}
+
+/// Medidor de nivel de micrófono (T29 punto 3). Barra fina horizontal cuyo
+/// relleno es proporcional a `voz.nivel` (RMS crudo, ~0.0–0.15) escalado ×6 y
+/// clampeado a [0,1] para que el movimiento sea visible. Etiquetado
+/// discretamente "Micrófono". Sirve para que el usuario VEA si el audio entra y
+/// para reportar el valor real y calibrar los umbrales del VAD.
+private struct MedidorNivel: View {
+    let nivel: Double
+
+    private var fraccion: Double {
+        min(max(nivel * 6, 0), 1)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "mic.fill")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.8))
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.white.opacity(0.2))
+                    Capsule()
+                        .fill(fraccion > 0.5 ? Color.green : Color.yellow)
+                        .frame(width: geo.size.width * fraccion)
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.black.opacity(0.4), in: Capsule())
+        .accessibilityLabel("Nivel de micrófono")
     }
 }
 

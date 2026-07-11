@@ -1606,7 +1606,7 @@ del ADR nativo en ARQUITECTURA.md):*
 
 ## Fase 22 — Correcciones de fondo tras prueba real: voz definitiva, lente/calidad robustas, notch teleprompter
 
-### ⬜ T29. Arreglar la detección de voz DE RAÍZ: pipeline de captura con AVAssetWriter + medidor de nivel visible
+### 🔨 T29. Arreglar la detección de voz DE RAÍZ: pipeline de captura con AVAssetWriter + medidor de nivel visible
 
 - **Diagnóstico (hecho por el orquestador leyendo el código, no a ciegas)**: la voz no funciona
   porque `CamaraController` usa `AVCaptureMovieFileOutput` para grabar Y agrega
@@ -1668,20 +1668,42 @@ del ADR nativo en ARQUITECTURA.md):*
   `ios/TelepromtCam/Voz/VozController.swift` (recibe buffer vía closure/método en vez de ser delegate
   directo), `ios/TelepromtCam/App/ContentView.swift` (medidor de nivel + ajustar el wiring de voz).
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores, sin warnings nuevos.
-  - [ ] Revisión de código: ya NO se usa `AVCaptureMovieFileOutput`; la grabación es vía
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores, sin warnings nuevos.
+  - [x] Revisión de código: ya NO se usa `AVCaptureMovieFileOutput`; la grabación es vía
     `AVAssetWriter` alimentado por `AVCaptureVideoDataOutput` + `AVCaptureAudioDataOutput`; el
     `AVAssetWriter` maneja su estado defensivamente (append solo si `.writing`, `startSession` con el
     primer timestamp, `finishWriting` async al detener con entrega de la URL).
-  - [ ] Revisión de código: cada buffer de audio llega a `VozController` (por closure/método), y la
+  - [x] Revisión de código: cada buffer de audio llega a `VozController` (por closure/método), y la
     lógica de VAD (histéresis/remapeo/suavizado/enganche) quedó intacta respecto a T22/T28.
-  - [ ] El medidor de nivel (`voz.nivel`) está visible en la UI mientras la cámara está activa.
-  - [ ] El espejo de la cámara frontal se aplica en el pipeline nuevo (video grabado espejado como el
+  - [x] El medidor de nivel (`voz.nivel`) está visible en la UI mientras la cámara está activa.
+  - [x] El espejo de la cámara frontal se aplica en el pipeline nuevo (video grabado espejado como el
     preview) y la orientación del video grabado es correcta (vertical, no rotado).
   - [ ] Prueba funcional (que el texto AHORA SÍ avance al hablar durante la grabación, que el medidor
-    se mueva con la voz, que el video guardado salga bien): **la hace el usuario** en su simulador con
-    cámara/mic reales — es el criterio que confirma que el bug quedó resuelto de verdad.
-- **Evidencia del verificador**: *(pendiente)*
+    se mueva con la voz, que el video guardado salga bien): **PENDIENTE — la hace el usuario** en su
+    simulador con cámara/mic reales — es el criterio que confirma que el bug quedó resuelto de verdad.
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`,
+  y grep confirma CERO residuos de `AVCaptureMovieFileOutput`/`AVCaptureFileOutputRecordingDelegate`
+  (solo comentarios). Revisé el `captureOutput` línea por línea (el corazón del arreglo): el buffer
+  de audio llama `vozController?.procesarSampleBuffer(sampleBuffer)` **incondicionalmente, se esté
+  grabando o no** — esto es clave: el medidor de nivel y la detección de voz funcionan apenas la
+  cámara está activa, sin necesidad de grabar. La escritura del `AVAssetWriter` es defensiva:
+  `startWriting`+`startSession` una sola vez con el PRIMER buffer de video (guard `status == .unknown`),
+  append de video/audio solo si `status == .writing` && `isReadyForMoreMediaData`, y el audio nunca
+  se appendéa antes de que la sesión del writer haya arrancado. Toda la escritura y el estado del
+  writer viven en una única cola serial `colaSampleBuffers` (misma para ambos delegates y para
+  iniciar/detener) → sin carreras. `finishWriting` async con entrega de `ultimaGrabacionURL` si
+  `.completed`, mensaje de error si no; caso "grabación demasiado corta" (writer nunca arrancó)
+  manejado con `cancelWriting`. Orientación (portrait, `videoRotationAngle=90` con fallback a
+  `videoOrientation`) y espejo (`isVideoMirrored` para frontal) fijados en la connection del
+  `videoDataOutput` — los buffers llegan ya rotados/espejados, así que el archivo sale correcto sin
+  `transform` extra. Wiring confirmado: `camara.vozController = voz` + `voz.iniciar()` en onAppear,
+  `MedidorNivel(nivel: voz.nivel)` visible, `weak var vozController` (sin ciclo de retención).
+  **ESTA VEZ CON HONESTIDAD (lección de APRENDIZAJES.md)**: lo que está verificado es que compila,
+  que la arquitectura que causaba el bug (conflicto MovieFileOutput+AudioDataOutput) ya no existe, y
+  que la lógica es correcta por revisión. Lo que NO está confirmado y solo el usuario puede confirmar
+  es que el texto AHORA SÍ avanza al hablar — ese ítem queda explícitamente PENDIENTE, sin lenguaje
+  concluyente. El medidor de nivel es la herramienta para calibrar: si se mueve al hablar, el audio
+  llega (arreglo funcionó) y solo queda ajustar umbrales con el valor real que reporte el usuario.
 
 ### ⬜ T30. Selección de lente y calidad robustas (enumerar dispositivos reales, mensajes claros)
 

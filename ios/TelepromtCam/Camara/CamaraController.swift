@@ -16,52 +16,61 @@ enum EstadoPermiso: Equatable {
 /// Controla la `AVCaptureSession` de la cámara frontal + micrófono.
 ///
 /// La sesión se arranca/para siempre en `colaSesion`, una cola serial dedicada,
-/// nunca en el hilo principal (patrón estándar de AVFoundation). La `session`
-/// y el `entradaAudio` quedan expuestos públicamente para que T18 (grabación)
-/// y T22 (análisis de audio) puedan reutilizarlos sin reconfigurar la sesión.
+/// nunca en el hilo principal (patrón estándar de AVFoundation).
+///
+/// T29 — pipeline de captura reescrito de raíz. ANTES la grabación usaba
+/// `AVCaptureMovieFileOutput` y la detección de voz un `AVCaptureAudioDataOutput`
+/// en la MISMA sesión. En iOS esos dos outputs NO coexisten de forma confiable:
+/// `session.canAddOutput(audioDataOutput)` devuelve `false` cuando el
+/// `MovieFileOutput` ya está presente, así que el output de audio nunca se
+/// conectaba, el delegate de audio nunca recibía buffers, el RMS era siempre 0
+/// y el texto no avanzaba (bug de T22 y T28).
+///
+/// AHORA no hay `MovieFileOutput`. Se graba con un `AVAssetWriter` alimentado
+/// por `AVCaptureVideoDataOutput` (pista de video) + `AVCaptureAudioDataOutput`
+/// (pista de audio). Como ya no hay `MovieFileOutput` con el que competir, el
+/// audio SIEMPRE llega, y esos mismos buffers de audio sirven para dos cosas:
+/// (a) escribir la pista de audio del `.mov`, y (b) alimentar el VAD de
+/// `VozController` (vía `vozController?.procesarSampleBuffer(_:)`).
 @Observable
 final class CamaraController: NSObject {
 
-    /// Sesión de captura compartida. Pública para que T18 le agregue
-    /// `AVCaptureMovieFileOutput` y T22 pueda leer del `entradaAudio`.
+    /// Sesión de captura compartida (la usa `PreviewCamara` para el preview).
     let session = AVCaptureSession()
 
-    /// Entrada de audio (micrófono), accesible para T22 (análisis de audio)
-    /// sin tener que volver a buscar el dispositivo.
+    /// Entrada de audio (micrófono).
     private(set) var entradaAudio: AVCaptureDeviceInput?
 
-    /// Entrada de video (cámara actual: frontal o trasera), accesible para
-    /// T18 (cambio de lente).
+    /// Entrada de video (cámara actual: frontal o trasera).
     private(set) var entradaVideo: AVCaptureDeviceInput?
 
-    /// Posición de la lente actualmente activa (frontal por defecto, T17).
+    /// Posición de la lente actualmente activa (frontal por defecto).
     private(set) var posicionLenteActual: AVCaptureDevice.Position = .front
 
-    /// Salida de grabación a archivo. Se agrega una sola vez en
-    /// `configurarSesion()`; el mismo output se reutiliza entre grabaciones
-    /// (grabar → detener → grabar de nuevo no reconfigura la sesión).
-    private let movieFileOutput = AVCaptureMovieFileOutput()
+    /// Salida de datos de VIDEO en vivo (T29). Alimenta la pista de video del
+    /// `AVAssetWriter`. Convive sin problemas con `audioDataOutput` en la
+    /// misma sesión (a diferencia del viejo `MovieFileOutput`).
+    let videoDataOutput = AVCaptureVideoDataOutput()
 
-    /// Salida de datos de audio en vivo (T28), usada por `VozController`
-    /// como fuente de audio en vez de un `AVAudioEngine` propio y separado.
-    /// Se agrega a la misma `AVCaptureSession` que ya está corriendo para
-    /// video/grabación (T17/T18), evitando dos consumidores de audio
-    /// independientes compitiendo por la `AVAudioSession` compartida — el
-    /// bug de fondo de la detección de voz que no funcionaba (T22 original
-    /// usaba un `AVAudioEngine` separado). `audioSettings` se fija a PCM
-    /// lineal Float32 para que `VozController` pueda calcular RMS
-    /// directamente sobre `Float` sin normalizar desde Int16.
+    /// Salida de datos de AUDIO en vivo (T29). Alimenta tanto la pista de
+    /// audio del `AVAssetWriter` como el cálculo de RMS de `VozController`.
     let audioDataOutput = AVCaptureAudioDataOutput()
 
-    /// `true` mientras hay una grabación en curso. Controla la idempotencia
-    /// de `iniciarGrabacion()`/`detenerGrabacion()`.
+    /// Referencia al `VozController` al que se le reenvía cada buffer de audio
+    /// para el VAD. `weak` para no crear un ciclo de retención (ContentView
+    /// mantiene ambos controllers vivos; `VozController` no retiene a este).
+    /// El wiring lo hace `ContentView` (`camara.vozController = voz`) antes de
+    /// arrancar la detección.
+    weak var vozController: VozController?
+
+    /// `true` mientras hay una grabación en curso (observable, para la UI).
     private(set) var estaGrabando = false
 
     /// URL del archivo temporal de la última grabación terminada con éxito.
     private(set) var ultimaGrabacionURL: URL?
 
-    /// Mensaje de error legible si la grabación falla al terminar o si
-    /// `cambiarLente` no puede activar la lente pedida.
+    /// Mensaje de error legible si la grabación falla o si `cambiarLente` no
+    /// puede activar la lente pedida.
     private(set) var errorGrabacion: String?
 
     /// Estado observable del permiso combinado de cámara + micrófono.
@@ -74,23 +83,36 @@ final class CamaraController: NSObject {
     /// `true` mientras la sesión de captura está corriendo.
     private(set) var sesionActiva = false
 
-    /// Cola serial dedicada para configurar y arrancar/parar la sesión.
-    /// AVCaptureSession.startRunning()/stopRunning() son bloqueantes y NUNCA
-    /// deben llamarse desde el hilo principal.
+    /// Cola serial dedicada para configurar/arrancar/parar la sesión.
     private let colaSesion = DispatchQueue(label: "com.telepromtcam.camara.sesion")
+
+    /// Cola serial dedicada para AMBOS delegates de sample buffers (video y
+    /// audio) y para toda la manipulación del `AVAssetWriter`. Usar una sola
+    /// cola serial serializa la escritura y evita carreras entre los callbacks
+    /// de video/audio y el inicio/fin de grabación.
+    private let colaSampleBuffers = DispatchQueue(label: "com.telepromtcam.camara.samplebuffers")
 
     private var sesionConfigurada = false
 
-    /// Solicita permisos de cámara y micrófono (dispara el prompt del sistema
-    /// una sola vez por instalación) y, si se conceden, configura y arranca
-    /// la sesión. Debe dispararse por una acción explícita del usuario
-    /// (ej. tap en "Activar cámara"), nunca automáticamente al aparecer la vista.
+    // MARK: - Estado del AVAssetWriter (confinado a `colaSampleBuffers`)
+
+    private var assetWriter: AVAssetWriter?
+    private var videoWriterInput: AVAssetWriterInput?
+    private var audioWriterInput: AVAssetWriterInput?
+    /// `true` una vez que se llamó `startSession` con el primer buffer de video.
+    private var sesionWriterIniciada = false
+    /// Flag de grabación confinado a `colaSampleBuffers` (separado del
+    /// observable `estaGrabando`, que es para la UI en el hilo principal).
+    private var grabando = false
+    private var urlGrabacionActual: URL?
+
+    // MARK: - Permisos
+
+    /// Solicita permisos de cámara y micrófono y, si se conceden, configura y
+    /// arranca la sesión. Debe dispararse por una acción explícita del usuario.
     func solicitarPermisosYActivar() {
         let estadoActualVideo = AVCaptureDevice.authorizationStatus(for: .video)
 
-        // Si ya sabemos que está denegado/restringido, NO volvemos a llamar
-        // requestAccess (el sistema no vuelve a mostrar el prompt de todas
-        // formas) — solo actualizamos el mensaje dirigiendo a Ajustes.
         if estadoActualVideo == .denied || estadoActualVideo == .restricted {
             actualizarEstado(desde: estadoActualVideo)
             return
@@ -134,8 +156,6 @@ final class CamaraController: NSObject {
         }
     }
 
-    /// Configura los inputs (una sola vez) y arranca la sesión, todo en la
-    /// cola dedicada.
     private func configurarYArrancar() {
         colaSesion.async { [weak self] in
             guard let self else { return }
@@ -153,8 +173,8 @@ final class CamaraController: NSObject {
         }
     }
 
-    /// Arma la sesión con la cámara frontal y el micrófono. Se ejecuta en
-    /// `colaSesion`.
+    /// Arma la sesión con la cámara frontal, el micrófono y los dos data
+    /// outputs (video + audio). Se ejecuta en `colaSesion`.
     private func configurarSesion() {
         session.beginConfiguration()
         defer { session.commitConfiguration() }
@@ -189,26 +209,21 @@ final class CamaraController: NSObject {
             }
         }
 
-        // Salida de grabación a archivo (T18). Se agrega una sola vez; el
-        // preset/resolución usan el default de la sesión (`.high`, ya
-        // definido arriba) — la calidad/fps configurables son T20.
-        if session.canAddOutput(movieFileOutput) {
-            session.addOutput(movieFileOutput)
+        // Salida de datos de VIDEO (T29). `alwaysDiscardsLateVideoFrames` para
+        // no acumular latencia si el writer se atrasa.
+        videoDataOutput.alwaysDiscardsLateVideoFrames = true
+        videoDataOutput.setSampleBufferDelegate(self, queue: colaSampleBuffers)
+        if session.canAddOutput(videoDataOutput) {
+            session.addOutput(videoDataOutput)
         } else {
             DispatchQueue.main.async { [weak self] in
-                self?.errorGrabacion = "No fue posible agregar la salida de grabación a la sesión."
+                self?.errorGrabacion = "No fue posible agregar la salida de video a la sesión."
             }
         }
 
-        // Salida de datos de audio en vivo (T28) para VozController.
-        //
-        // NOTA: `AVCaptureAudioDataOutput.audioSettings` está marcado
-        // `API_UNAVAILABLE(ios, ...)` en el SDK de iOS (a diferencia de
-        // macOS, donde sí se puede fijar) — asignarlo no compila. Por eso
-        // NO se fuerza el formato a Float32 aquí; `VozController` lee el
-        // formato real del `CMSampleBuffer` (vía su `CMFormatDescription`)
-        // en cada callback y calcula el RMS soportando tanto Int16 como
-        // Float32, sea cual sea el que iOS entregue por defecto.
+        // Salida de datos de AUDIO (T29). Ahora SÍ se puede agregar junto al
+        // videoDataOutput (ya no hay MovieFileOutput con el que competir).
+        audioDataOutput.setSampleBufferDelegate(self, queue: colaSampleBuffers)
         if session.canAddOutput(audioDataOutput) {
             session.addOutput(audioDataOutput)
         } else {
@@ -217,43 +232,90 @@ final class CamaraController: NSObject {
             }
         }
 
-        aplicarEspejadoVideo()
+        configurarConexionVideo()
 
         sesionConfigurada = true
     }
 
-    /// Espeja la conexión de video del `movieFileOutput` cuando la lente
-    /// activa es la frontal (T28, punto 2) — sin esto, el video grabado con
-    /// la cámara frontal sale invertido horizontalmente respecto a lo que
-    /// el usuario ve en el preview en vivo (que Apple espeja por defecto a
-    /// nivel de capa de preview, pero NO a nivel del archivo grabado).
-    /// Se llama tanto tras la configuración inicial como tras cada
-    /// `cambiarLente(a:)`, siempre con la posición vigente en ese momento.
-    private func aplicarEspejadoVideo() {
-        guard let connection = movieFileOutput.connection(with: .video) else { return }
-        guard connection.isVideoMirroringSupported else { return }
-        connection.isVideoMirrored = posicionLenteActual == .front
+    /// Fija orientación (vertical/portrait) y espejo (para la cámara frontal)
+    /// en la conexión de video del `videoDataOutput`. Al fijarlas en la
+    /// conexión, los `CMSampleBuffer` que llegan YA vienen rotados y espejados,
+    /// así que el archivo grabado por el `AVAssetWriter` queda vertical y
+    /// espejado como el preview sin necesidad de aplicar un `transform` extra.
+    /// Se llama tras la configuración inicial y tras cada `cambiarLente`.
+    private func configurarConexionVideo() {
+        guard let connection = videoDataOutput.connection(with: .video) else { return }
+
+        // Orientación vertical (portrait). En el SDK moderno (iOS 17+) se usa
+        // `videoRotationAngle` (90° = portrait); se cae a `videoOrientation`
+        // si la API nueva no está disponible.
+        if connection.isVideoRotationAngleSupported(90) {
+            connection.videoRotationAngle = 90
+        } else if connection.isVideoOrientationSupported {
+            connection.videoOrientation = .portrait
+        }
+
+        // Espejo solo para la cámara frontal (igual que el preview de Apple).
+        if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = posicionLenteActual == .front
+        }
     }
 
-    // MARK: - Grabación (T18)
-    //
-    // Nota sobre la lección de la web: en Safari, `MediaRecorder` se cortaba
-    // a los ~20s y hubo que mitigar con hacks de timeslice + WakeLock.
-    // `AVCaptureMovieFileOutput` nativo no tiene ese bug — no se replican
-    // esos hacks aquí. `isIdleTimerDisabled` se usa solo como buena práctica
-    // para que la pantalla no se apague durante una grabación larga, no como
-    // mitigación de ningún corte.
+    // MARK: - Grabación con AVAssetWriter (T29)
 
-    /// Arranca la grabación a un archivo temporal único. Idempotente: si ya
-    /// hay una grabación en curso, no hace nada (no permite doble-inicio).
+    /// Arranca la grabación a un archivo temporal único, creando el
+    /// `AVAssetWriter` y sus inputs. Idempotente. `startWriting`/`startSession`
+    /// NO se llaman aquí: se hacen en el primer buffer de video que llegue
+    /// estando grabando (ver `captureOutput`).
     func iniciarGrabacion() {
-        colaSesion.async { [weak self] in
+        colaSampleBuffers.async { [weak self] in
             guard let self else { return }
-            guard !self.movieFileOutput.isRecording else { return }
+            guard !self.grabando else { return }
 
-            let nombreArchivo = UUID().uuidString + ".mov"
             let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent(nombreArchivo)
+                .appendingPathComponent(UUID().uuidString + ".mov")
+
+            let writer: AVAssetWriter
+            do {
+                writer = try AVAssetWriter(url: url, fileType: .mov)
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorGrabacion = "No fue posible crear el archivo de grabación: \(error.localizedDescription)"
+                }
+                return
+            }
+
+            // Dimensiones portrait (la conexión de video ya rota a 90°, así
+            // que los buffers llegan verticales). 1080x1920 es un tamaño
+            // razonable para el preset `.high`; si el buffer real difiere, el
+            // writer reescala.
+            let videoSettings: [String: Any] = [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: 1080,
+                AVVideoHeightKey: 1920,
+            ]
+            let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+            videoInput.expectsMediaDataInRealTime = true
+
+            let audioSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVNumberOfChannelsKey: 1,
+                AVSampleRateKey: 44100,
+                AVEncoderBitRateKey: 128000,
+            ]
+            let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+            audioInput.expectsMediaDataInRealTime = true
+
+            if writer.canAdd(videoInput) { writer.add(videoInput) }
+            if writer.canAdd(audioInput) { writer.add(audioInput) }
+
+            self.assetWriter = writer
+            self.videoWriterInput = videoInput
+            self.audioWriterInput = audioInput
+            self.sesionWriterIniciada = false
+            self.urlGrabacionActual = url
+            self.grabando = true
 
             DispatchQueue.main.async {
                 self.errorGrabacion = nil
@@ -261,34 +323,94 @@ final class CamaraController: NSObject {
                 self.estaGrabando = true
                 UIApplication.shared.isIdleTimerDisabled = true
             }
-
-            self.movieFileOutput.startRecording(to: url, recordingDelegate: self)
         }
     }
 
-    /// Limpia `ultimaGrabacionURL` (T24: llamado por `ModalResultado` tras
-    /// guardar en Fotos o descartar) para cerrar el `.fullScreenCover` y
-    /// dejar la app lista para grabar de nuevo sin reiniciar nada más.
+    /// Detiene la grabación en curso, finaliza el `AVAssetWriter` y entrega la
+    /// URL (o un error) por el mismo contrato que antes (`ultimaGrabacionURL`).
+    /// Idempotente.
+    func detenerGrabacion() {
+        colaSampleBuffers.async { [weak self] in
+            guard let self else { return }
+            guard self.grabando else { return }
+            self.grabando = false
+
+            guard let writer = self.assetWriter else {
+                self.finalizarUISinGrabacion()
+                return
+            }
+
+            let url = self.urlGrabacionActual
+
+            // Si nunca llegó a escribir (p. ej. se detuvo antes del primer
+            // buffer de video), no se puede finishWriting desde `.unknown`:
+            // se cancela y se reporta.
+            guard self.sesionWriterIniciada, writer.status == .writing else {
+                if writer.status == .writing || writer.status == .unknown {
+                    writer.cancelWriting()
+                }
+                self.limpiarWriter()
+                DispatchQueue.main.async {
+                    self.errorGrabacion = "La grabación fue demasiado corta para guardarse."
+                    self.ultimaGrabacionURL = nil
+                    self.estaGrabando = false
+                    UIApplication.shared.isIdleTimerDisabled = false
+                }
+                return
+            }
+
+            self.videoWriterInput?.markAsFinished()
+            self.audioWriterInput?.markAsFinished()
+
+            writer.finishWriting {
+                let completado = writer.status == .completed
+                self.colaSampleBuffers.async {
+                    self.limpiarWriter()
+                }
+                DispatchQueue.main.async {
+                    if completado {
+                        self.errorGrabacion = nil
+                        self.ultimaGrabacionURL = url
+                    } else {
+                        self.errorGrabacion = "No fue posible completar la grabación: \(writer.error?.localizedDescription ?? "error desconocido")."
+                        self.ultimaGrabacionURL = nil
+                    }
+                    self.estaGrabando = false
+                    UIApplication.shared.isIdleTimerDisabled = false
+                }
+            }
+        }
+    }
+
+    /// Resetea las referencias del writer. Debe llamarse en `colaSampleBuffers`.
+    private func limpiarWriter() {
+        assetWriter = nil
+        videoWriterInput = nil
+        audioWriterInput = nil
+        sesionWriterIniciada = false
+        urlGrabacionActual = nil
+    }
+
+    /// Cierra el estado de UI de grabación cuando no hubo writer que finalizar.
+    /// Debe llamarse en `colaSampleBuffers`.
+    private func finalizarUISinGrabacion() {
+        limpiarWriter()
+        DispatchQueue.main.async {
+            self.estaGrabando = false
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
+    }
+
+    /// Limpia `ultimaGrabacionURL` (llamado por `ModalResultado` tras guardar
+    /// en Fotos o descartar) para cerrar el `.fullScreenCover`.
     func limpiarUltimaGrabacion() {
         ultimaGrabacionURL = nil
     }
 
-    /// Detiene la grabación en curso. Idempotente: si no hay grabación
-    /// activa, no hace nada (no permite doble-detención inconsistente).
-    func detenerGrabacion() {
-        colaSesion.async { [weak self] in
-            guard let self else { return }
-            guard self.movieFileOutput.isRecording else { return }
-            self.movieFileOutput.stopRecording()
-        }
-    }
+    // MARK: - Cambio de lente
 
-    // MARK: - Cambio de lente (T18)
-
-    /// Reconfigura el input de video a la cámara frontal o trasera. Remueve
-    /// el input anterior ANTES de agregar el nuevo; si el nuevo falla (ej.
-    /// no hay cámara trasera en este dispositivo), vuelve a agregar el
-    /// input anterior para no dejar la sesión sin video.
+    /// Reconfigura el input de video a la cámara frontal o trasera. Si el nuevo
+    /// falla, restaura el anterior para no dejar la sesión sin video.
     func cambiarLente(a posicion: AVCaptureDevice.Position) {
         colaSesion.async { [weak self] in
             guard let self else { return }
@@ -325,13 +447,11 @@ final class CamaraController: NSObject {
                 self.entradaVideo = entradaNueva
                 self.posicionLenteActual = posicion
                 self.session.commitConfiguration()
-                self.aplicarEspejadoVideo()
+                self.configurarConexionVideo()
                 DispatchQueue.main.async {
                     self.errorGrabacion = nil
                 }
             } else {
-                // El nuevo input falló: restauramos el anterior para no
-                // dejar la sesión sin cámara.
                 if let entradaAnterior, self.session.canAddInput(entradaAnterior) {
                     self.session.addInput(entradaAnterior)
                 }
@@ -343,12 +463,10 @@ final class CamaraController: NSObject {
         }
     }
 
-    // MARK: - Calidad y fps (T20)
+    // MARK: - Calidad y fps
 
-    /// Aplica un nuevo `AVCaptureSession.Preset` a la sesión, validando con
-    /// `canSetSessionPreset` ANTES de asignarlo. Si el preset pedido no está
-    /// soportado por el hardware actual, no hace nada y deja el preset
-    /// vigente (nunca crashea por asignar un preset no soportado).
+    /// Aplica un nuevo `AVCaptureSession.Preset`, validando con
+    /// `canSetSessionPreset` antes de asignarlo.
     func aplicarCalidadCamara(_ calidad: CalidadCamara) {
         colaSesion.async { [weak self] in
             guard let self else { return }
@@ -371,14 +489,8 @@ final class CamaraController: NSObject {
         }
     }
 
-    /// Aplica un nuevo fps al dispositivo de video activo. Busca en
-    /// `activeFormat.videoSupportedFrameRateRanges` si el fps pedido cae
-    /// dentro de algún rango soportado; si es así, lo asigna con
-    /// `CMTime(value:1, timescale:)`. Si NO es soportado, hace clamp al
-    /// extremo (min o max) del rango soportado más cercano en vez de
-    /// asignar un valor inválido — este es el punto clásico de crash de
-    /// AVFoundation (`activeVideoMinFrameDuration` fuera de rango), por eso
-    /// se valida siempre antes de escribir.
+    /// Aplica un nuevo fps al dispositivo de video activo, haciendo clamp al
+    /// rango soportado más cercano si el valor pedido no cabe.
     func aplicarFPS(_ fps: FPS) {
         colaSesion.async { [weak self] in
             guard let self else { return }
@@ -394,16 +506,10 @@ final class CamaraController: NSObject {
                 return
             }
 
-            // Si el fps pedido cae dentro de algún rango soportado, se usa
-            // tal cual. Si no, se busca el rango más cercano y se hace
-            // clamp al extremo (min o max) de ese rango.
             var fpsFinal: Double
-            if let rangoQueContiene = rangos.first(where: { ($0.minFrameRate...$0.maxFrameRate).contains(fpsPedido) }) {
+            if rangos.contains(where: { ($0.minFrameRate...$0.maxFrameRate).contains(fpsPedido) }) {
                 fpsFinal = fpsPedido
-                _ = rangoQueContiene
             } else {
-                // Ningún rango contiene el valor pedido: clamp al rango
-                // cuyo extremo esté más cerca del fps pedido.
                 var mejorDistancia = Double.greatestFiniteMagnitude
                 var mejorClamp = fpsPedido
                 for rango in rangos {
@@ -438,8 +544,7 @@ final class CamaraController: NSObject {
         }
     }
 
-    /// Detiene la sesión en la cola dedicada. Seguro de llamar aunque la
-    /// sesión no esté corriendo.
+    /// Detiene la sesión en la cola dedicada.
     func detener() {
         colaSesion.async { [weak self] in
             guard let self else { return }
@@ -453,27 +558,58 @@ final class CamaraController: NSObject {
     }
 }
 
-// MARK: - AVCaptureFileOutputRecordingDelegate
+// MARK: - Delegates de sample buffers (video + audio)
 
-extension CamaraController: AVCaptureFileOutputRecordingDelegate {
-    func fileOutput(
-        _ output: AVCaptureFileOutput,
-        didFinishRecordingTo outputFileURL: URL,
-        from connections: [AVCaptureConnection],
-        error: Error?
+extension CamaraController: AVCaptureVideoDataOutputSampleBufferDelegate,
+    AVCaptureAudioDataOutputSampleBufferDelegate
+{
+    /// Ambos outputs (`videoDataOutput` y `audioDataOutput`) llaman a este
+    /// mismo método en `colaSampleBuffers`. Se distingue por identidad del
+    /// output. Como es una cola serial, no hay carreras entre las dos rutas ni
+    /// con `iniciar/detenerGrabacion` (que también corren en esta cola).
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
     ) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.estaGrabando = false
-            UIApplication.shared.isIdleTimerDisabled = false
+        if output === audioDataOutput {
+            // 1) SIEMPRE alimentar el VAD, se esté grabando o no.
+            vozController?.procesarSampleBuffer(sampleBuffer)
 
-            if let error {
-                self.errorGrabacion = "No fue posible completar la grabación: \(error.localizedDescription)"
-                self.ultimaGrabacionURL = nil
-            } else {
-                self.errorGrabacion = nil
-                self.ultimaGrabacionURL = outputFileURL
+            // 2) Escribir la pista de audio, solo si el writer ya arrancó su
+            //    sesión (con un buffer de video) y está en `.writing`. No se
+            //    hace append de audio antes de `startSession` para no romper
+            //    el writer.
+            guard grabando,
+                sesionWriterIniciada,
+                let writer = assetWriter,
+                writer.status == .writing,
+                let audioInput = audioWriterInput,
+                audioInput.isReadyForMoreMediaData
+            else { return }
+
+            audioInput.append(sampleBuffer)
+
+        } else if output === videoDataOutput {
+            guard grabando, let writer = assetWriter else { return }
+
+            // Arrancar el writer con el PRIMER buffer de video (una sola vez).
+            if !sesionWriterIniciada {
+                guard writer.status == .unknown else { return }
+                if writer.startWriting() {
+                    writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+                    sesionWriterIniciada = true
+                } else {
+                    return
+                }
             }
+
+            guard writer.status == .writing,
+                let videoInput = videoWriterInput,
+                videoInput.isReadyForMoreMediaData
+            else { return }
+
+            videoInput.append(sampleBuffer)
         }
     }
 }

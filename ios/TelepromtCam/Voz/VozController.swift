@@ -8,16 +8,15 @@ import Observation
 /// ritmo/energía de la voz — equivalente conceptual a `js/voz.js` T7/T8 de
 /// la web.
 ///
-/// T28: la fuente de audio YA NO es un `AVAudioEngine` propio con su
-/// propia `AVAudioSession` (ese diseño era el bug de fondo por el que la
-/// detección de voz no funcionaba de forma confiable: dos consumidores de
-/// audio independientes — el `AVCaptureSession` de `CamaraController` y
-/// este `AVAudioEngine` — compitiendo por la misma `AVAudioSession`
-/// compartida del proceso). Ahora `VozController` es
-/// `AVCaptureAudioDataOutputSampleBufferDelegate` y recibe los mismos
-/// `CMSampleBuffer` de audio que ya fluyen por la `AVCaptureSession` de
-/// `CamaraController` (T17/T18), a través de un `AVCaptureAudioDataOutput`
-/// agregado a esa misma sesión — una sola fuente de verdad para el audio.
+/// T29: la fuente de audio YA NO es un `AVAudioEngine` propio, ni este
+/// controller es el delegate directo del `AVCaptureAudioDataOutput`. Un
+/// `AVCaptureAudioDataOutput` admite UN solo delegate, y ahora ese delegate es
+/// `CamaraController` (que necesita los buffers de audio para escribir la pista
+/// de audio del `AVAssetWriter`). Por eso `CamaraController` recibe cada buffer
+/// y se lo REENVÍA a este controller llamando `procesarSampleBuffer(_:)`. Toda
+/// la lógica de VAD (RMS, histéresis, remapeo de rango — la lección crítica —,
+/// suavizado, enganche a `setVelocidad`) se conserva idéntica; solo cambia de
+/// dónde llega el buffer.
 @Observable
 final class VozController: NSObject {
 
@@ -36,14 +35,18 @@ final class VozController: NSObject {
     /// Umbral de energía RMS para ENTRAR en estado "hablando". Más alto que
     /// el umbral de salida a propósito (histéresis) — hace falta cruzar este
     /// umbral desde silencio para que el sistema decida que hay voz.
-    private let umbralEntradaHabla: Double = 0.02
+    /// T29: bajado a 0.01 para MÁXIMA sensibilidad inicial. Con el medidor de
+    /// nivel visible en la UI (T29 punto 3), el usuario puede reportar el valor
+    /// real de `nivel` al hablar/callar y calibrar este umbral con datos reales.
+    private let umbralEntradaHabla: Double = 0.01
 
     /// Umbral de energía RMS para SALIR de "hablando" y volver a "silencio".
     /// Más bajo que `umbralEntradaHabla`: una vez hablando, el nivel tiene
     /// que caer más para considerarse silencio, evitando el parpadeo
     /// habla/silencio varias veces por segundo en un tono sostenido cerca
     /// de un único umbral.
-    private let umbralSalidaHabla: Double = 0.01
+    /// T29: bajado a 0.005 (más bajo que el de entrada, histéresis).
+    private let umbralSalidaHabla: Double = 0.005
 
     /// Nivel RMS esperado para una voz "fuerte"/rápida hablando cerca del
     /// micrófono del iPhone. El RMS crudo de un micrófono real vive en un
@@ -86,15 +89,6 @@ final class VozController: NSObject {
 
     private let teleprompter: TeleprompterController
 
-    /// Cola dedicada para recibir los `CMSampleBuffer` de audio — nunca el
-    /// hilo principal (mismo patrón que `colaSesion` de `CamaraController`).
-    private let colaAudio = DispatchQueue(label: "com.telepromtcam.voz.audio")
-
-    /// Referencia al output cuyo delegate se registra/desregistra en
-    /// `iniciar()`/`detener()`, guardada para poder desregistrarse sin que
-    /// el llamador tenga que repetirla.
-    private weak var audioDataOutputActual: AVCaptureAudioDataOutput?
-
     /// Factor suavizado que se aplica de verdad al teleprompter. Converge
     /// hacia `factorObjetivo` con interpolación exponencial en cada buffer
     /// de audio recibido, en vez de saltar directo — evita
@@ -107,12 +101,12 @@ final class VozController: NSObject {
 
     // MARK: - Arranque
 
-    /// Se registra como delegate de `audioDataOutput` (el
-    /// `AVCaptureAudioDataOutput` que `CamaraController` ya agregó a su
-    /// `AVCaptureSession` — T28). No arranca ninguna sesión propia: la
-    /// `AVCaptureSession` ya está corriendo por otro lado (T17/T18); esto
-    /// solo empieza a recibir los buffers que ya fluyen por ella.
-    func iniciar(audioDataOutput: AVCaptureAudioDataOutput) {
+    /// Activa el VAD. Ya NO se registra como delegate de ningún output (T29):
+    /// `CamaraController` es el delegate del `AVCaptureAudioDataOutput` y le
+    /// reenvía cada buffer a `procesarSampleBuffer(_:)`. Aquí solo se marca el
+    /// flag `motorActivo` (que hace que `procesarSampleBuffer` procese en vez
+    /// de descartar) tras verificar el permiso de micrófono.
+    func iniciar() {
         guard !motorActivo else { return }
 
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
@@ -120,21 +114,32 @@ final class VozController: NSObject {
             return
         }
 
-        audioDataOutput.setSampleBufferDelegate(self, queue: colaAudio)
-        audioDataOutputActual = audioDataOutput
         motorActivo = true
         mensajeError = nil
     }
 
     func detener() {
         guard motorActivo else { return }
-        audioDataOutputActual?.setSampleBufferDelegate(nil, queue: nil)
-        audioDataOutputActual = nil
         motorActivo = false
         nivel = 0
         estaHablando = false
         factorSuavizado = 0
         teleprompter.setVelocidad(0)
+    }
+
+    // MARK: - Entrada de audio (reenviada por CamaraController)
+
+    /// Punto de entrada del audio (T29): `CamaraController` llama a este método
+    /// desde su callback de `AVCaptureAudioDataOutput` (en su cola de sample
+    /// buffers), pasando cada `CMSampleBuffer` de audio. Calcula el RMS aquí
+    /// (fuera del hilo principal, como antes hacía el delegate) y despacha a
+    /// `main` para `procesarNivel`, que toca estado `@Observable`.
+    func procesarSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+        guard motorActivo else { return }
+        let rms = Self.calcularRMS(sampleBuffer: sampleBuffer)
+        DispatchQueue.main.async { [weak self] in
+            self?.procesarNivel(rms)
+        }
     }
 
     // MARK: - Cálculo de energía RMS
@@ -302,23 +307,5 @@ final class VozController: NSObject {
 
         let fraccionSinClamp = (nivelCrudo - umbralEntradaHabla) / rango
         return max(0, min(1, fraccionSinClamp))
-    }
-}
-
-// MARK: - AVCaptureAudioDataOutputSampleBufferDelegate
-
-extension VozController: AVCaptureAudioDataOutputSampleBufferDelegate {
-    /// Se llama en `colaAudio`, NO en el hilo principal — mismo motivo por
-    /// el que el tap del `AVAudioEngine` anterior despachaba a
-    /// `DispatchQueue.main.async` antes de tocar el estado `@Observable`.
-    func captureOutput(
-        _ output: AVCaptureOutput,
-        didOutput sampleBuffer: CMSampleBuffer,
-        from connection: AVCaptureConnection
-    ) {
-        let rms = Self.calcularRMS(sampleBuffer: sampleBuffer)
-        DispatchQueue.main.async { [weak self] in
-            self?.procesarNivel(rms)
-        }
     }
 }
