@@ -1511,6 +1511,73 @@ del ADR nativo en ARQUITECTURA.md):*
 
 ---
 
+## Fase 21 — Primer feedback real de simulador: voz no detectada, espejo de video, reordenar ajustes
+
+### ⬜ T28. Arreglar detección de voz (audio vía AVCaptureSession, no AVAudioEngine separado), espejar grabación, mover preview de ajustes arriba de tipografía
+
+- **Alcance**:
+  - INCLUYE:
+    1. **Arreglar la detección de voz (bug real, confirmado por el usuario en simulador)**: el
+       texto no avanza — el guion queda completamente quieto. Causa más probable: `VozController`
+       (T22) usa un `AVAudioEngine` PROPIO con su propia `AVAudioSession`, compitiendo por el mismo
+       micrófono que ya está siendo consumido por la `AVCaptureSession` de `CamaraController`
+       (T17/T18) para la grabación de video+audio. Esta arquitectura de "dos consumidores
+       independientes del mismo hardware de audio" es frágil y en el simulador (y posiblemente en
+       dispositivo real) puede resultar en que el tap de `AVAudioEngine` reciba buffers en silencio
+       o no reciba nada, porque `AVCaptureSession` ya reclamó la ruta de audio.
+       **Solución correcta (patrón estándar de iOS para este caso exacto)**: eliminar el
+       `AVAudioEngine`/`AVAudioSession` propio de `VozController` y en su lugar agregar un
+       `AVCaptureAudioDataOutput` a la MISMA `AVCaptureSession` de `CamaraController` (junto al
+       `AVCaptureMovieFileOutput` de T18), con su delegate (`AVCaptureAudioDataOutputSampleBufferDelegate`)
+       entregando `CMSampleBuffer`s desde los que `VozController` calcula el RMS (extrayendo los
+       datos PCM del `CMSampleBuffer` con `CMSampleBufferGetAudioBufferList`/`AudioBufferList`, en
+       vez de `AVAudioPCMBuffer`). Esto evita por completo el conflicto de dos consumidores de audio
+       — un solo output de la sesión de captura alimenta tanto la grabación (vía
+       `AVCaptureMovieFileOutput`) como el análisis de voz (vía `AVCaptureAudioDataOutput`), ambos
+       de la misma `AVCaptureSession`, sin pelear por la `AVAudioSession`. El resto de la lógica de
+       `VozController` (histéresis, el remapeo de rango obligatorio de la lección crítica de T22,
+       suavizado, enganche a `TeleprompterController.setVelocidad`) se conserva igual — solo cambia
+       la FUENTE del audio, no el algoritmo de VAD.
+    2. **Espejar el video grabado para que coincida con el preview**: con la cámara frontal, el
+       preview normalmente se ve en espejo (como un espejo real / selfie), pero el archivo grabado
+       por defecto NO queda espejado (queda "como te ven los demás"). El usuario pidió que el video
+       grabado se vea igual que el preview que está viendo (espejado). En `CamaraController.swift`,
+       al configurar/usar el `AVCaptureMovieFileOutput`, localizar su `AVCaptureConnection` de video
+       y, cuando la cámara activa es la frontal (`.front`), poner `connection.isVideoMirrored = true`
+       (verificando `connection.isVideoMirroringSupported` antes). Al cambiar a cámara trasera,
+       `isVideoMirrored` debe volver a `false` (la trasera no se espeja). Aplicar esto tanto en la
+       configuración inicial como dentro de `cambiarLente(a:)`.
+    3. **Preview de ajustes arriba de la tipografía**: en `PantallaAjustes.swift`, mover la sección
+       que contiene `PreviewAjustes` (hoy al final, después de Velocidad) para que quede
+       INMEDIATAMENTE DESPUÉS de la sección "Cámara" y ANTES de la sección "Tipografía" — así el
+       usuario ve el efecto en vivo mientras mueve los sliders de abajo, en vez de tener que hacer
+       scroll hasta el final para verlo.
+  - NO INCLUYE: cambiar el algoritmo de VAD (histéresis/remapeo/suavizado de T22 se mantienen
+    intactos, solo cambia la fuente de audio), ni tocar el flujo de grabación de T24 más allá de
+    agregar el espejo.
+- **Archivos**: `ios/TelepromtCam/Voz/VozController.swift` (reescritura de la fuente de audio),
+  `ios/TelepromtCam/Camara/CamaraController.swift` (agrega `AVCaptureAudioDataOutput` a la sesión,
+  espejo de video), `ios/TelepromtCam/Ajustes/PantallaAjustes.swift` (reordenar secciones).
+- **Definición de Hecho**:
+  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores, 0 warnings nuevos.
+  - [ ] Revisión de código: `VozController` ya NO crea su propio `AVAudioEngine`/`AVAudioSession`;
+    consume audio vía `AVCaptureAudioDataOutput` agregado a `CamaraController.session`; el cálculo
+    de RMS opera sobre los datos del `CMSampleBuffer` correctamente extraídos; histéresis/remapeo/
+    suavizado/enganche a `setVelocidad` se conservan sin cambios de lógica.
+  - [ ] Revisión de código: `isVideoMirrored` se aplica `true` para cámara frontal y `false` para
+    trasera, verificando `isVideoMirroringSupported` antes, tanto en la configuración inicial como
+    en `cambiarLente(a:)`.
+  - [ ] `PantallaAjustes.swift`: la sección del preview aparece antes que "Tipografía" en el orden
+    del `Form` (verificable leyendo el orden de las `Section` en el código).
+  - [ ] Prueba funcional (que el texto ahora sí siga la voz real, que el video grabado salga
+    espejado como el preview, que el preview de ajustes se vea arriba): **la hace el usuario** —
+    esta vez en simulador con micrófono/cámara del Mac (ya confirmó que el simulador SÍ tiene
+    acceso a cámara/mic reales del equipo), así que a diferencia de tareas anteriores, esta SÍ es
+    razonable pedir que se confirme rápido tras el próximo build.
+- **Evidencia del verificador**: *(pendiente)*
+
+---
+
 ## Bugs
 
 *Lo que el verificador o cualquiera encuentre fuera del alcance de la tarea en curso.
