@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Política de privacidad — TelepromtCam</title>
+<style>
+  :root {
+    color-scheme: light dark;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+    line-height: 1.6;
+    color: #1c1c1e;
+    background: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #f2f2f7; background: #0d0d0f; }
+    a { color: #6ea8fe; }
+    .callout { background: #1c1c1f; border-left-color: #6ea8fe; }
+    hr { border-color: #333; }
+  }
+  h1 {
+    font-size: 1.7rem;
+    margin-bottom: 0.25rem;
+  }
+  h2 {
+    font-size: 1.2rem;
+    margin-top: 2.2rem;
+  }
+  .updated {
+    color: #6e6e73;
+    font-size: 0.95rem;
+    margin-bottom: 2rem;
+  }
+  .callout {
+    background: #f2f7ff;
+    border-left: 4px solid #0a84ff;
+    padding: 1rem 1.25rem;
+    border-radius: 6px;
+    margin: 1.5rem 0;
+  }
+  ul {
+    padding-left: 1.3rem;
+  }
+  li {
+    margin-bottom: 0.6rem;
+  }
+  code {
+    background: rgba(127,127,127,0.15);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.92em;
+  }
+  hr {
+    margin: 2.5rem 0;
+    border: none;
+    border-top: 1px solid #d0d0d5;
+  }
+  footer {
+    color: #6e6e73;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>Política de privacidad de TelepromtCam</h1>
+<p class="updated">Última actualización: 10 de julio de 2026</p>
+
+<p>TelepromtCam ("la app") es una aplicación para iPhone que funciona como teleprompter mientras
+graba video con la cámara del dispositivo. Esta política explica, de forma clara y completa, qué
+datos usa la app y qué hace (y qué no hace) con ellos.</p>
+
+<h2>Resumen</h2>
+<div class="callout">
+  <p>TelepromtCam <strong>no tiene servidor ni backend</strong>, <strong>no incluye ningún tipo de
+  analítica ni rastreo</strong>, y <strong>no recopila ni transmite ningún dato personal a ningún
+  lugar</strong>. Todo lo que la app usa para funcionar —tu guion, tus preferencias y los videos que
+  grabas— se queda <strong>únicamente en tu dispositivo</strong>, bajo tu control.</p>
+</div>
+
+<h2>Permisos que usa la app y para qué</h2>
+<p>TelepromtCam solicita los siguientes permisos del sistema operativo, exclusivamente para las
+funciones que ofrece:</p>
+<ul>
+  <li><strong>Cámara</strong>: se usa para mostrar la vista en vivo de la cámara y grabar el video
+  mientras lees el guion en el teleprompter. La imagen de la cámara se procesa en el dispositivo y
+  se graba directamente en el archivo de video local; no se envía a ningún servidor.</li>
+  <li><strong>Micrófono</strong>: se usa para dos cosas, ambas en el dispositivo: (1) grabar el audio
+  del video que estás creando, y (2) medir el nivel de energía de tu voz (qué tan fuerte o rápido
+  hablas) para ajustar automáticamente la velocidad de avance del texto del teleprompter. Esta
+  medición <strong>no es transcripción ni reconocimiento de voz</strong>: la app no entiende ni
+  interpreta lo que dices, solo detecta niveles de volumen y ritmo para sincronizar el texto con tu
+  forma de hablar.</li>
+  <li><strong>Acceso de escritura al carrete de Fotos</strong>: se usa únicamente para guardar, si tú
+  lo decides al terminar de grabar, el video resultante en tu app de Fotos. La app solo pide permiso
+  de <strong>escritura</strong> (agregar fotos/videos a tu carrete); no lee, explora ni accede a tu
+  biblioteca de fotos existente.</li>
+</ul>
+<p>Estos permisos corresponden exactamente a los textos de uso ("usage strings") declarados en el
+archivo de configuración de la app (<code>Info.plist</code>): <code>NSCameraUsageDescription</code>,
+<code>NSMicrophoneUsageDescription</code> y <code>NSPhotoLibraryAddUsageDescription</code>.</p>
+
+<h2>Qué datos recopila la app</h2>
+<p><strong>Ninguno.</strong> De forma explícita:</p>
+<ul>
+  <li>TelepromtCam <strong>no tiene servidor, backend ni infraestructura en la nube</strong> de
+  ningún tipo. La app funciona completamente sin conexión a internet.</li>
+  <li>TelepromtCam <strong>no incluye ningún SDK de analítica, métricas de uso, rastreo publicitario
+  ni herramientas de terceros</strong> que recopilen información sobre ti o tu uso de la app.</li>
+  <li>TelepromtCam <strong>no recopila, no almacena en servidores externos y no transmite</strong> tu
+  guion, tus videos, tu voz, tu ubicación, tu identidad ni ningún otro dato personal a ningún
+  tercero, servidor propio o servicio externo.</li>
+  <li>El guion de texto que escribes o pegas en el editor se guarda <strong>solo en tu
+  dispositivo</strong>, para que puedas retomarlo la próxima vez que abras la app.</li>
+  <li>Las preferencias que configuras (calidad de video, fps, lente, tipografía, color, opacidad de
+  fondo, velocidad del teleprompter) se guardan <strong>solo en tu dispositivo</strong>.</li>
+  <li>Los videos que grabas existen únicamente en tu dispositivo: si eliges guardarlos, quedan en tu
+  carrete de Fotos personal (protegido por el propio sistema operativo iOS); si eliges
+  descartarlos, se eliminan y la app no conserva ninguna copia.</li>
+</ul>
+
+<h2>Menores de edad</h2>
+<p>TelepromtCam no está dirigida específicamente a niños y no recopila ningún dato de ningún
+usuario, independientemente de su edad, por las razones descritas arriba.</p>
+
+<h2>Cambios a esta política</h2>
+<p>Si en el futuro la app cambia de forma que afecte el tratamiento de datos descrito aquí, esta
+política se actualizará y se indicará la nueva fecha de "última actualización" en la parte superior
+de este documento.</p>
+
+<h2>Contacto</h2>
+<p>Si tienes preguntas sobre esta política de privacidad, puedes escribir a:</p>
+<p><em>[correo de contacto pendiente — completar con el email que el desarrollador quiera usar para
+soporte, por ejemplo soporte@tudominio.com]</em></p>
+
+<hr>
+<footer>TelepromtCam — política de privacidad</footer>
+
+</body>
+</html>

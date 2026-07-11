@@ -1352,7 +1352,7 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
 
 ## Fase 19 — Metadata de App Store Connect (texto real, listo para copiar/pegar)
 
-### ⬜ T26. Metadata de App Store Connect + borrador de política de privacidad
+### ✅ T26. Metadata de App Store Connect + borrador de política de privacidad
 
 - **Alcance**:
   - INCLUYE: crear en `ios/AppStore/` archivos de texto con el **contenido real** (NO placeholders)
@@ -1386,20 +1386,35 @@ anotado en Ideas/futuro como "fase de diseño posterior" — el usuario confirm�
   `ios/AppStore/resumen-privacidad-apple.md`, `privacidad.html` (raíz del repo, para GitHub Pages),
   opcional `soporte.html` (raíz).
 - **Definición de Hecho**:
-  - [ ] `metadata.md` contiene TODOS los campos listados con texto real redactado (no "TODO"/
+  - [x] `metadata.md` contiene TODOS los campos listados con texto real redactado (no "TODO"/
     placeholder), respetando los límites de caracteres de App Store (subtítulo ≤30, keywords ≤100) —
     verificable contando caracteres.
-  - [ ] La política de privacidad afirma explícitamente: usa cámara/mic/escritura a Fotos; sin
+  - [x] La política de privacidad afirma explícitamente: usa cámara/mic/escritura a Fotos; sin
     analítica; sin backend; datos solo en el dispositivo. Coherente con lo que el código realmente
     hace (verificable cruzando con los usage strings de T16 y el uso de `PHPhotoLibrary` de T24).
-  - [ ] `privacidad.html` es HTML válido y quedará servible desde GitHub Pages en la URL declarada en
+  - [x] `privacidad.html` es HTML válido y quedará servible desde GitHub Pages en la URL declarada en
     `metadata.md` (la publicación real —push— la confirma el flujo normal del repo; el archivo existe
     en la raíz).
-  - [ ] `resumen-privacidad-apple.md` mapea cada categoría del cuestionario de Apple a "no se recopila"
+  - [x] `resumen-privacidad-apple.md` mapea cada categoría del cuestionario de Apple a "no se recopila"
     con una nota de por qué.
   - [ ] Revisión editorial final del texto de marketing: **la hace el usuario** (puede querer ajustar
     el tono); el contenido queda completo y usable tal cual.
-- **Evidencia del verificador**: *(pendiente)*
+- **Evidencia del verificador**: Verificado independientemente con `wc -c`: subtítulo "Teleprompter y
+  grabación" = 25 bytes (24 caracteres visibles, la diferencia es la tilde de "grabación" en UTF-8),
+  bajo el límite de 30; palabras clave = 97 bytes, bajo el límite de 100. `metadata.md` completo con
+  los 7 campos pedidos, todos con texto real (leído completo, sin placeholders). `privacidad.html`
+  confirmado con las tres afirmaciones clave presentes (cámara/mic/Fotos, sin backend, sin
+  analítica) mediante verificación de contenido. Coherencia cruzada: `NSCameraUsageDescription`/
+  `NSMicrophoneUsageDescription`/`NSPhotoLibraryAddUsageDescription` (T16) y el uso exclusivo de
+  escritura (`addOnly`) de `PHPhotoLibrary` en `GuardadoFotos.swift` (T24) respaldan exactamente lo
+  que la política afirma — no hay contradicción entre el texto legal y lo que el código realmente
+  hace. Categoría primaria/secundaria justificada con razonamiento breve. El `resumen-privacidad-apple.md`
+  incluye el razonamiento correcto de por qué "User Content (Photos/Videos)" sigue siendo
+  "Data Not Collected" según la definición de Apple (collection = transmisión fuera del dispositivo,
+  no uso/almacenamiento local) — un matiz fácil de pasar por alto y que el constructor manejó bien.
+  Pendiente explícito: el email de contacto en la política quedó como placeholder claro (depende del
+  usuario) y la revisión editorial del tono de marketing la debe hacer el usuario. Con esto se cierra
+  la Fase 19 (Metadata de App Store Connect).
 
 ---
 
