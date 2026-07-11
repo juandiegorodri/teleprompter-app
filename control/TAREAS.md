@@ -1592,6 +1592,165 @@ del ADR nativo en ARQUITECTURA.md):*
   esta sí es razonable esperar que el usuario la confirme rápido, porque reportó que su simulador
   SÍ tiene acceso a cámara/mic reales del Mac — es la primera vez en el proyecto nativo que hay
   hardware real disponible para probar. Con esto se cierra la Fase 21.
+- **CORRECCIÓN POST-PRUEBA (importante)**: el usuario probó T28 en simulador con cámara/mic reales y
+  la voz SIGUE sin funcionar (el texto no avanza). La evidencia de arriba fue sobreconfiada — llamó
+  "patrón estándar" a agregar `AVCaptureAudioDataOutput` a la misma sesión que ya tiene
+  `AVCaptureMovieFileOutput`, PERO esos dos outputs entran en conflicto en iOS: `canAddOutput` puede
+  devolver `false` cuando ya está el `MovieFileOutput`, así que la salida de audio se agrega en el
+  código pero silenciosamente NUNCA se conecta a la sesión → el delegate no recibe buffers → RMS
+  siempre 0 → el texto no avanza. Se resuelve de raíz en T29 (migrar a `AVAssetWriter`). Lección
+  para APRENDIZAJES.md: no marcar una tarea como resuelta con lenguaje confiado cuando el resultado
+  no se pudo ejercitar; "compila + revisión de código" no es "funciona".
+
+---
+
+## Fase 22 — Correcciones de fondo tras prueba real: voz definitiva, lente/calidad robustas, notch teleprompter
+
+### ⬜ T29. Arreglar la detección de voz DE RAÍZ: pipeline de captura con AVAssetWriter + medidor de nivel visible
+
+- **Diagnóstico (hecho por el orquestador leyendo el código, no a ciegas)**: la voz no funciona
+  porque `CamaraController` usa `AVCaptureMovieFileOutput` para grabar Y agrega
+  `AVCaptureAudioDataOutput` a la MISMA sesión para la detección de voz. Esos dos outputs entran en
+  conflicto en iOS — `session.canAddOutput(audioDataOutput)` devuelve `false` cuando el
+  `MovieFileOutput` ya está presente, así que el output de audio se "agrega" en el código pero jamás
+  se conecta; el delegate de audio nunca recibe un solo buffer; el RMS es siempre 0; el texto nunca
+  avanza. Esto explica por qué T22 (AVAudioEngine separado) y T28 (AudioDataOutput junto a
+  MovieFileOutput) fallaron ambos: ninguno garantizaba la entrega de audio al VAD.
+- **Alcance**:
+  - INCLUYE:
+    1. **Reemplazar el pipeline de grabación** de `AVCaptureMovieFileOutput` por
+       `AVCaptureVideoDataOutput` + `AVCaptureAudioDataOutput` alimentando un `AVAssetWriter`. Con
+       esta arquitectura, el `AVCaptureAudioDataOutput` SIEMPRE entrega buffers (no hay
+       `MovieFileOutput` con el que competir), y esos mismos buffers de audio se usan para DOS cosas:
+       (a) escribir la pista de audio del video vía `AVAssetWriterInput`, y (b) alimentar el cálculo
+       de RMS de `VozController`. Los buffers de video van al `AVAssetWriter` para la pista de video.
+       - `CamaraController` implementa `AVCaptureVideoDataOutputSampleBufferDelegate` y
+         `AVCaptureAudioDataOutputSampleBufferDelegate` (o una clase auxiliar), en una cola de
+         sample buffers dedicada.
+       - Grabación: al iniciar, crear un `AVAssetWriter` (a un `.mov`/`.mp4` temporal) con un input
+         de video (`AVAssetWriterInput` con `mediaType: .video`, usando `expectsMediaDataInRealTime = true`)
+         y uno de audio; en cada sample buffer, si está grabando y el writer está listo, hacer
+         `append`. Manejar `startSession(atSourceTime:)` con el timestamp del primer buffer. Al
+         detener, `finishWriting` y entregar la URL (mismo contrato que hoy: setear
+         `ultimaGrabacionURL`). Manejar el estado del writer defensivamente (no hacer append si
+         `status != .writing`).
+       - **Espejo**: aplicar el espejo de la cámara frontal en la conexión del
+         `AVCaptureVideoDataOutput` (`connection.isVideoMirrored = true` para frontal, si
+         `isVideoMirroringSupported`) y/o vía el `transform` del `AVAssetWriterInput` — de modo que
+         el archivo grabado quede espejado como el preview (requisito de T28 que se conserva).
+       - **Orientación**: fijar la orientación de la conexión de video para que el video no quede
+         rotado (vertical). Usar `videoRotationAngle`/`videoOrientation` según la API disponible en
+         el SDK; si es complejo, al menos documentar y dejar vertical correcto.
+    2. **`VozController` sigue recibiendo el audio** — ahora desde el `AVCaptureAudioDataOutput` que
+       `CamaraController` ya expone. Como CamaraController ahora es el delegate de audio (para
+       escribir la pista), reenvía cada buffer de audio a `VozController` (ej. `VozController` expone
+       `procesarSampleBuffer(_:)` y `CamaraController` lo llama desde su callback de audio), O
+       `VozController` se registra como un segundo delegate — pero como un `AVCaptureAudioDataOutput`
+       solo admite UN delegate, la forma limpia es: `CamaraController` recibe el audio y se lo pasa a
+       `VozController` por un closure/referencia. Conserva TODA la lógica de VAD de VozController
+       (histéresis, remapeo de rango — la lección crítica de T14/T22 —, suavizado, enganche a
+       `setVelocidad`) sin cambios; solo cambia de dónde llega el buffer.
+    3. **Medidor de nivel de audio VISIBLE en la UI** (observabilidad — para dejar de adivinar la
+       calibración): una barra fina o indicador que muestre `voz.nivel` (0–1) en tiempo real, visible
+       al menos mientras la cámara está activa (puede ir arriba o cerca del teleprompter, discreto).
+       Así el usuario puede VER si el micrófono está entrando y qué tan fuerte, y podemos calibrar los
+       umbrales contra datos reales en vez de a ciegas. Es la herramienta que convierte "no funciona,
+       no sé por qué" en "la barra se mueve / no se mueve".
+    4. **Bajar y suavizar los umbrales para máxima sensibilidad inicial**: dado que seguimos sin
+       micrófono en ESTE entorno pero el usuario SÍ puede probar, dejar `umbralEntradaHabla` bajo
+       (ej. 0.01) y `umbralSalidaHabla` más bajo aún (ej. 0.005), y documentar que con el medidor
+       visible del punto 3 el usuario puede reportar el valor real de `nivel` al hablar/callar para
+       una calibración final precisa.
+  - NO INCLUYE: cambiar el algoritmo de VAD (histéresis/remapeo/suavizado se conservan), ni el
+    modal de resultado de T24 (sigue recibiendo una URL de archivo, solo cambia quién la produce),
+    ni el notch teleprompter (T31), ni la robustez de lente/calidad (T30).
+- **Archivos**: `ios/TelepromtCam/Camara/CamaraController.swift` (rewrite del pipeline de captura),
+  `ios/TelepromtCam/Voz/VozController.swift` (recibe buffer vía closure/método en vez de ser delegate
+  directo), `ios/TelepromtCam/App/ContentView.swift` (medidor de nivel + ajustar el wiring de voz).
+- **Definición de Hecho**:
+  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores, sin warnings nuevos.
+  - [ ] Revisión de código: ya NO se usa `AVCaptureMovieFileOutput`; la grabación es vía
+    `AVAssetWriter` alimentado por `AVCaptureVideoDataOutput` + `AVCaptureAudioDataOutput`; el
+    `AVAssetWriter` maneja su estado defensivamente (append solo si `.writing`, `startSession` con el
+    primer timestamp, `finishWriting` async al detener con entrega de la URL).
+  - [ ] Revisión de código: cada buffer de audio llega a `VozController` (por closure/método), y la
+    lógica de VAD (histéresis/remapeo/suavizado/enganche) quedó intacta respecto a T22/T28.
+  - [ ] El medidor de nivel (`voz.nivel`) está visible en la UI mientras la cámara está activa.
+  - [ ] El espejo de la cámara frontal se aplica en el pipeline nuevo (video grabado espejado como el
+    preview) y la orientación del video grabado es correcta (vertical, no rotado).
+  - [ ] Prueba funcional (que el texto AHORA SÍ avance al hablar durante la grabación, que el medidor
+    se mueva con la voz, que el video guardado salga bien): **la hace el usuario** en su simulador con
+    cámara/mic reales — es el criterio que confirma que el bug quedó resuelto de verdad.
+- **Evidencia del verificador**: *(pendiente)*
+
+### ⬜ T30. Selección de lente y calidad robustas (enumerar dispositivos reales, mensajes claros)
+
+- **Alcance**:
+  - INCLUYE:
+    1. **Lente**: en vez de asumir que existen frontal y trasera, enumerar las cámaras realmente
+       disponibles con `AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera],
+       mediaType: .video, position: .unspecified)` y ofrecer en el Picker de `PantallaAjustes` SOLO
+       las posiciones que existen en el dispositivo. En el simulador / un Mac con una sola cámara,
+       la opción "Trasera" no debe aparecer o debe estar deshabilitada con una nota ("no disponible
+       en este dispositivo") — así el usuario entiende por qué "no pasa nada" en vez de que falle en
+       silencio. En un iPhone real con ambas, las dos opciones funcionan (la lógica de `cambiarLente`
+       de T18 ya es correcta; el problema era solo de UX/enumeración).
+    2. **Calidad**: al cambiar el preset, si `canSetSessionPreset` falla, mostrar el mensaje claro
+       (ya existe) — pero además, ofrecer en el Picker solo los presets que el dispositivo/formato
+       activo soporta (verificar `canSetSessionPreset` para cada opción al construir el Picker, o
+       marcar las no soportadas). Documentar que en el simulador los presets disponibles son
+       limitados y que el efecto de calidad solo se aprecia de verdad en un iPhone físico.
+  - NO INCLUYE: cambiar la lógica interna de `cambiarLente`/`aplicarCalidadCamara` (ya son correctas
+    y defensivas — el problema es de enumeración/UX, no del cambio en sí), ni el pipeline de captura
+    (T29).
+- **Archivos**: `ios/TelepromtCam/Ajustes/PantallaAjustes.swift`, posiblemente
+  `ios/TelepromtCam/Camara/CamaraController.swift` (exponer las cámaras disponibles) y/o
+  `ios/TelepromtCam/Ajustes/AjustesStore.swift`.
+- **Definición de Hecho**:
+  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [ ] Revisión de código: el Picker de lente refleja las cámaras realmente disponibles (no ofrece
+    una que no existe sin marcarla); el de calidad no ofrece presets no soportados sin señalarlo.
+  - [ ] Prueba funcional (en simulador se ve por qué "trasera" no aplica; en iPhone real cambia de
+    lente y calidad de verdad): **la hace el usuario**.
+- **Evidencia del verificador**: *(pendiente)*
+
+### ⬜ T31. Modo "Notch Teleprompter": texto del teleprompter en un recuadro alrededor del notch/Dynamic Island
+
+- **Alcance**:
+  - INCLUYE: una opción configurable (Toggle en `PantallaAjustes`, persistida en `AjustesStore`)
+    llamada "Notch Teleprompter". Cuando está habilitada, el texto del teleprompter YA NO se muestra
+    en la franja/overlay actual, sino dentro de un **recuadro negro con bordes redondeados ubicado en
+    la parte superior de la pantalla, envolviendo el área del notch / Dynamic Island** y extendiéndose
+    hacia los lados y hacia abajo — un área pequeña, justo debajo/alrededor de la cámara frontal, para
+    que los ojos del usuario queden lo más cerca posible del lente (mirar a cámara mientras lee = se
+    ve natural). El texto del teleprompter se desplaza dentro de esa área reducida (reusa el mismo
+    `TeleprompterController` y su scroll por delta de tiempo — solo cambia el CONTENEDOR visual y su
+    tamaño/posición, no la lógica de avance ni el enganche por voz).
+    - El recuadro debe: tener fondo negro sólido (para "fundirse" con el notch/isla), bordes
+      redondeados, posicionarse arriba del todo respetando/abrazando la safe area superior, y ser
+      angosto (unas pocas líneas de texto visibles). El texto adentro con `.mask`/`clipShape` para
+      que no se salga del recuadro redondeado.
+    - Cuando el Toggle está DESHABILITADO, el teleprompter se comporta como hoy (overlay actual).
+    - El tamaño de fuente dentro del modo notch puede necesitar un default más pequeño (el área es
+      chica) — decide si reusa `AjustesStore.tamanoFuente` o aplica un factor de reducción en ese
+      modo; documenta la decisión.
+  - NO INCLUYE: detección automática del modelo exacto de iPhone / dimensiones exactas de cada notch
+    (usar la safe area superior de SwiftUI, que ya se adapta al dispositivo, es suficiente y correcto),
+    ni animaciones elaboradas de expansión tipo Dynamic Island (basta el recuadro estático redondeado).
+- **Archivos**: `ios/TelepromtCam/Ajustes/AjustesStore.swift` (flag persistido),
+  `ios/TelepromtCam/Ajustes/PantallaAjustes.swift` (Toggle), `ios/TelepromtCam/App/ContentView.swift`
+  y/o `ios/TelepromtCam/Teleprompter/OverlayTeleprompter.swift` (el recuadro del notch como variante
+  de presentación del teleprompter).
+- **Definición de Hecho**:
+  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [ ] Revisión de código: el flag persiste en `AjustesStore`; con el flag ON el teleprompter se
+    renderiza en el recuadro negro redondeado superior que abraza la safe area del notch, con el
+    texto recortado al recuadro; con el flag OFF, el comportamiento es el overlay actual; la lógica
+    de scroll/voz (`TeleprompterController`) se reusa sin cambios.
+  - [ ] Prueba visual (que el recuadro salga bien alrededor del notch/isla, que el texto se lea y se
+    desplace dentro): **la hace el usuario** en simulador/iPhone real (el aspecto exacto depende del
+    modelo).
+- **Evidencia del verificador**: *(pendiente)*
 
 ---
 
