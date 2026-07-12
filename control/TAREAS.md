@@ -1755,7 +1755,7 @@ del ADR nativo en ARQUITECTURA.md):*
   sigue congelándose al grabar, la causa sería otra (posiblemente presión de CPU global del encoder
   por software en el simulador, o algo dentro del propio VAD) y habría que seguir investigando.
 
-### ⬜ T30. Selección de lente y calidad robustas (enumerar dispositivos reales, mensajes claros, confirmación visible del cambio)
+### ✅ T30. Selección de lente y calidad robustas (enumerar dispositivos reales, mensajes claros, confirmación visible del cambio)
 
 - **Alcance**:
   - INCLUYE:
@@ -1789,12 +1789,24 @@ del ADR nativo en ARQUITECTURA.md):*
   `ios/TelepromtCam/Camara/CamaraController.swift` (exponer las cámaras disponibles) y/o
   `ios/TelepromtCam/Ajustes/AjustesStore.swift`.
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
-  - [ ] Revisión de código: el Picker de lente refleja las cámaras realmente disponibles (no ofrece
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [x] Revisión de código: el Picker de lente refleja las cámaras realmente disponibles (no ofrece
     una que no existe sin marcarla); el de calidad no ofrece presets no soportados sin señalarlo.
   - [ ] Prueba funcional (en simulador se ve por qué "trasera" no aplica; en iPhone real cambia de
-    lente y calidad de verdad): **la hace el usuario**.
-- **Evidencia del verificador**: *(pendiente)*
+    lente y calidad de verdad): **PENDIENTE — la hace el usuario**.
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`.
+  Confirmado por grep: `posicionesLenteDisponibles()` usa `AVCaptureDevice.DiscoverySession` real;
+  `PantallaAjustes` lo consume para mostrar el Picker de lente solo con opciones múltiples, o una fila
+  de solo lectura con nota clara si solo hay una cámara (resuelve el "no pasa nada" del simulador con
+  una explicación visible en vez de un fallo silencioso). El Picker de calidad marca con ícono naranja
+  las opciones no soportadas por `canSetSessionPreset` sin eliminarlas del todo (deja que el usuario
+  las intente, el mensaje de error existente cubre el fallo). `ultimaConfiguracionAplicada` se setea
+  en los tres caminos de éxito (lente/calidad/fps) y `PantallaAjustes` lo consume vía `.onChange` con
+  un `Task` de auto-ocultado a 2s que se cancela si llega un mensaje más nuevo (sin fugas de tareas
+  colgadas). Esto resuelve directamente la queja del usuario ("no sabemos si los ajustes están
+  afectando en algo") — ahora hay una señal positiva explícita, no solo silencio o error. **Nota**:
+  sin GUI interactiva en este entorno, no se pudo confirmar visualmente el aspecto del Picker
+  deshabilitado ni el mensaje verde apareciendo/desapareciendo — el usuario debe confirmarlo.
 
 ### ⬜ T31. Modo "Notch Teleprompter": texto del teleprompter en un recuadro alrededor del notch/Dynamic Island
 

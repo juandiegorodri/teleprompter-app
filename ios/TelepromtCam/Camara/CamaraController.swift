@@ -73,6 +73,15 @@ final class CamaraController: NSObject {
     /// puede activar la lente pedida.
     private(set) var errorGrabacion: String?
 
+    /// Descripción legible de la última configuración aplicada con ÉXITO por
+    /// `aplicarCalidadCamara`/`aplicarFPS`/`cambiarLente` (T30). ANTES esas
+    /// funciones solo escribían en `errorGrabacion` cuando algo fallaba; en el
+    /// camino de éxito no había ninguna señal, así que el usuario no podía
+    /// distinguir "se aplicó pero no se nota" de "no pasó nada". La UI
+    /// (`PantallaAjustes`) observa esta propiedad para mostrar un mensaje
+    /// breve con checkmark que se auto-oculta.
+    private(set) var ultimaConfiguracionAplicada: String?
+
     /// Estado observable del permiso combinado de cámara + micrófono.
     private(set) var estadoPermiso: EstadoPermiso = .noSolicitado
 
@@ -461,6 +470,23 @@ final class CamaraController: NSObject {
 
     // MARK: - Cambio de lente
 
+    /// Posiciones de cámara REALMENTE disponibles en este dispositivo (T30).
+    /// ANTES el Picker de `PantallaAjustes` ofrecía "Frontal"/"Trasera" a
+    /// ciegas, así que en el simulador (una sola cámara del Mac) elegir
+    /// "Trasera" fallaba en silencio sin explicación clara. Ahora se enumeran
+    /// los dispositivos reales con `DiscoverySession` y la UI solo ofrece las
+    /// posiciones que existen de verdad. Método (no propiedad calculada
+    /// cacheada) porque `DiscoverySession` es barato de crear y así siempre
+    /// refleja el estado actual del hardware.
+    func posicionesLenteDisponibles() -> [AVCaptureDevice.Position] {
+        let discovery = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera],
+            mediaType: .video,
+            position: .unspecified
+        )
+        return discovery.devices.map(\.position)
+    }
+
     /// Reconfigura el input de video a la cámara frontal o trasera. Si el nuevo
     /// falla, restaura el anterior para no dejar la sesión sin video.
     func cambiarLente(a posicion: AVCaptureDevice.Position) {
@@ -502,6 +528,7 @@ final class CamaraController: NSObject {
                 self.configurarConexionVideo()
                 DispatchQueue.main.async {
                     self.errorGrabacion = nil
+                    self.ultimaConfiguracionAplicada = "Cámara cambiada a \(posicion == .front ? "Frontal" : "Trasera")"
                 }
             } else {
                 if let entradaAnterior, self.session.canAddInput(entradaAnterior) {
@@ -537,6 +564,7 @@ final class CamaraController: NSObject {
 
             DispatchQueue.main.async {
                 self.errorGrabacion = nil
+                self.ultimaConfiguracionAplicada = "Calidad aplicada: \(calidad.label)"
             }
         }
     }
@@ -587,6 +615,7 @@ final class CamaraController: NSObject {
 
                 DispatchQueue.main.async {
                     self.errorGrabacion = nil
+                    self.ultimaConfiguracionAplicada = "Fps aplicados: \(Int(fpsFinal))"
                 }
             } catch {
                 DispatchQueue.main.async {
