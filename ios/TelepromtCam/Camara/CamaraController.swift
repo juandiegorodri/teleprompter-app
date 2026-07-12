@@ -86,25 +86,55 @@ final class CamaraController: NSObject {
     /// Cola serial dedicada para configurar/arrancar/parar la sesión.
     private let colaSesion = DispatchQueue(label: "com.telepromtcam.camara.sesion")
 
-    /// Cola serial dedicada para AMBOS delegates de sample buffers (video y
-    /// audio) y para toda la manipulación del `AVAssetWriter`. Usar una sola
-    /// cola serial serializa la escritura y evita carreras entre los callbacks
-    /// de video/audio y el inicio/fin de grabación.
-    private let colaSampleBuffers = DispatchQueue(label: "com.telepromtcam.camara.samplebuffers")
+    /// Cola serial dedicada SOLO al delegate de `videoDataOutput` (T29b). La
+    /// codificación H264 de los buffers 1080x1920 es pesada en CPU (aún más en
+    /// el encoder por software del simulador); aislarla en su propia cola evita
+    /// que el trabajo de video bloquee al de audio.
+    private let colaVideo = DispatchQueue(label: "com.telepromtcam.camara.video", qos: .userInitiated)
+
+    /// Cola serial dedicada SOLO al delegate de `audioDataOutput` (T29b). Al
+    /// estar separada de `colaVideo`, los callbacks de audio (livianos, deben
+    /// ser rápidos para alimentar el medidor de nivel de voz) nunca quedan en
+    /// fila detrás de la codificación de video.
+    private let colaAudio = DispatchQueue(label: "com.telepromtcam.camara.audio", qos: .userInitiated)
+
+    /// Cola serial de CONTROL (T29b): corre `iniciarGrabacion`/`detenerGrabacion`
+    /// y la limpieza del writer. Antes esa lógica corría en la cola compartida de
+    /// sample buffers; ahora que video y audio tienen colas propias, el control
+    /// vive en su propia cola para no interferir con ninguno de los dos caminos
+    /// de captura. La consistencia del estado compartido la garantiza `lockWriter`.
+    private let colaControl = DispatchQueue(label: "com.telepromtcam.camara.control")
 
     private var sesionConfigurada = false
 
-    // MARK: - Estado del AVAssetWriter (confinado a `colaSampleBuffers`)
+    // MARK: - Estado del AVAssetWriter (protegido por `lockWriter`)
+
+    /// Lock que protege el estado compartido del writer contra acceso concurrente
+    /// REAL (T29b). Desde que video y audio corren en colas DISTINTAS a la vez,
+    /// las lecturas/escrituras de `assetWriter`, `videoWriterInput`,
+    /// `audioWriterInput`, `sesionWriterIniciada`, `grabando` y `urlGrabacionActual`
+    /// pueden ocurrir simultáneamente. Se toma SIEMPRE de forma breve: solo para
+    /// leer/mutar estas variables. El trabajo pesado (`append` de video/audio,
+    /// creación del writer) SIEMPRE ocurre FUERA del lock.
+    private let lockWriter = NSLock()
 
     private var assetWriter: AVAssetWriter?
     private var videoWriterInput: AVAssetWriterInput?
     private var audioWriterInput: AVAssetWriterInput?
     /// `true` una vez que se llamó `startSession` con el primer buffer de video.
     private var sesionWriterIniciada = false
-    /// Flag de grabación confinado a `colaSampleBuffers` (separado del
-    /// observable `estaGrabando`, que es para la UI en el hilo principal).
+    /// Flag de grabación (separado del observable `estaGrabando`, que es para la
+    /// UI en el hilo principal). Protegido por `lockWriter`.
     private var grabando = false
     private var urlGrabacionActual: URL?
+
+    /// Ejecuta `body` con `lockWriter` tomado. Mantén el cuerpo MÍNIMO: solo
+    /// lectura/mutación del estado compartido, nunca trabajo pesado.
+    private func conLock<T>(_ body: () -> T) -> T {
+        lockWriter.lock()
+        defer { lockWriter.unlock() }
+        return body()
+    }
 
     // MARK: - Permisos
 
@@ -212,7 +242,7 @@ final class CamaraController: NSObject {
         // Salida de datos de VIDEO (T29). `alwaysDiscardsLateVideoFrames` para
         // no acumular latencia si el writer se atrasa.
         videoDataOutput.alwaysDiscardsLateVideoFrames = true
-        videoDataOutput.setSampleBufferDelegate(self, queue: colaSampleBuffers)
+        videoDataOutput.setSampleBufferDelegate(self, queue: colaVideo)
         if session.canAddOutput(videoDataOutput) {
             session.addOutput(videoDataOutput)
         } else {
@@ -223,7 +253,7 @@ final class CamaraController: NSObject {
 
         // Salida de datos de AUDIO (T29). Ahora SÍ se puede agregar junto al
         // videoDataOutput (ya no hay MovieFileOutput con el que competir).
-        audioDataOutput.setSampleBufferDelegate(self, queue: colaSampleBuffers)
+        audioDataOutput.setSampleBufferDelegate(self, queue: colaAudio)
         if session.canAddOutput(audioDataOutput) {
             session.addOutput(audioDataOutput)
         } else {
@@ -269,9 +299,9 @@ final class CamaraController: NSObject {
     /// NO se llaman aquí: se hacen en el primer buffer de video que llegue
     /// estando grabando (ver `captureOutput`).
     func iniciarGrabacion() {
-        colaSampleBuffers.async { [weak self] in
+        colaControl.async { [weak self] in
             guard let self else { return }
-            guard !self.grabando else { return }
+            guard !self.conLock({ self.grabando }) else { return }
 
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString + ".mov")
@@ -310,12 +340,16 @@ final class CamaraController: NSObject {
             if writer.canAdd(videoInput) { writer.add(videoInput) }
             if writer.canAdd(audioInput) { writer.add(audioInput) }
 
-            self.assetWriter = writer
-            self.videoWriterInput = videoInput
-            self.audioWriterInput = audioInput
-            self.sesionWriterIniciada = false
-            self.urlGrabacionActual = url
-            self.grabando = true
+            // Publicar el estado compartido bajo lock (sección crítica mínima:
+            // solo asignaciones; el writer y los inputs ya están construidos).
+            self.conLock {
+                self.assetWriter = writer
+                self.videoWriterInput = videoInput
+                self.audioWriterInput = audioInput
+                self.sesionWriterIniciada = false
+                self.urlGrabacionActual = url
+                self.grabando = true
+            }
 
             DispatchQueue.main.async {
                 self.errorGrabacion = nil
@@ -330,22 +364,37 @@ final class CamaraController: NSObject {
     /// URL (o un error) por el mismo contrato que antes (`ultimaGrabacionURL`).
     /// Idempotente.
     func detenerGrabacion() {
-        colaSampleBuffers.async { [weak self] in
+        colaControl.async { [weak self] in
             guard let self else { return }
-            guard self.grabando else { return }
-            self.grabando = false
 
-            guard let writer = self.assetWriter else {
+            // Snapshot atómico del estado compartido y apagado de `grabando`
+            // bajo lock (sección crítica mínima). Copiamos las referencias que
+            // necesitamos para operar FUERA del lock.
+            let (estabaGrabando, writer, sesionIniciada, url, videoInput, audioInput):
+                (Bool, AVAssetWriter?, Bool, URL?, AVAssetWriterInput?, AVAssetWriterInput?) = self.conLock {
+                    let g = self.grabando
+                    if g { self.grabando = false }
+                    return (
+                        g,
+                        self.assetWriter,
+                        self.sesionWriterIniciada,
+                        self.urlGrabacionActual,
+                        self.videoWriterInput,
+                        self.audioWriterInput
+                    )
+                }
+
+            guard estabaGrabando else { return }
+
+            guard let writer else {
                 self.finalizarUISinGrabacion()
                 return
             }
 
-            let url = self.urlGrabacionActual
-
             // Si nunca llegó a escribir (p. ej. se detuvo antes del primer
             // buffer de video), no se puede finishWriting desde `.unknown`:
             // se cancela y se reporta.
-            guard self.sesionWriterIniciada, writer.status == .writing else {
+            guard sesionIniciada, writer.status == .writing else {
                 if writer.status == .writing || writer.status == .unknown {
                     writer.cancelWriting()
                 }
@@ -359,12 +408,12 @@ final class CamaraController: NSObject {
                 return
             }
 
-            self.videoWriterInput?.markAsFinished()
-            self.audioWriterInput?.markAsFinished()
+            videoInput?.markAsFinished()
+            audioInput?.markAsFinished()
 
             writer.finishWriting {
                 let completado = writer.status == .completed
-                self.colaSampleBuffers.async {
+                self.colaControl.async {
                     self.limpiarWriter()
                 }
                 DispatchQueue.main.async {
@@ -382,17 +431,20 @@ final class CamaraController: NSObject {
         }
     }
 
-    /// Resetea las referencias del writer. Debe llamarse en `colaSampleBuffers`.
+    /// Resetea las referencias del writer bajo `lockWriter`. Puede llamarse desde
+    /// cualquier cola; el lock garantiza que no colisione con lecturas de los
+    /// callbacks de video/audio.
     private func limpiarWriter() {
-        assetWriter = nil
-        videoWriterInput = nil
-        audioWriterInput = nil
-        sesionWriterIniciada = false
-        urlGrabacionActual = nil
+        conLock {
+            assetWriter = nil
+            videoWriterInput = nil
+            audioWriterInput = nil
+            sesionWriterIniciada = false
+            urlGrabacionActual = nil
+        }
     }
 
     /// Cierra el estado de UI de grabación cuando no hubo writer que finalizar.
-    /// Debe llamarse en `colaSampleBuffers`.
     private func finalizarUISinGrabacion() {
         limpiarWriter()
         DispatchQueue.main.async {
@@ -563,49 +615,62 @@ final class CamaraController: NSObject {
 extension CamaraController: AVCaptureVideoDataOutputSampleBufferDelegate,
     AVCaptureAudioDataOutputSampleBufferDelegate
 {
-    /// Ambos outputs (`videoDataOutput` y `audioDataOutput`) llaman a este
-    /// mismo método en `colaSampleBuffers`. Se distingue por identidad del
-    /// output. Como es una cola serial, no hay carreras entre las dos rutas ni
-    /// con `iniciar/detenerGrabacion` (que también corren en esta cola).
+    /// `videoDataOutput` llama en `colaVideo` y `audioDataOutput` en `colaAudio`
+    /// (T29b): son colas seriales DISTINTAS, así que las dos rutas pueden correr
+    /// a la vez. Se distingue por identidad del output. El estado compartido del
+    /// writer se lee/muta SIEMPRE bajo `lockWriter`, en secciones críticas
+    /// mínimas; el trabajo pesado (`append`) ocurre FUERA del lock.
     func captureOutput(
         _ output: AVCaptureOutput,
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
         if output === audioDataOutput {
-            // 1) SIEMPRE alimentar el VAD, se esté grabando o no.
+            // 1) SIEMPRE y PRIMERO alimentar el VAD, se esté grabando o no, ANTES
+            //    de tocar cualquier estado compartido protegido por lock. Así el
+            //    medidor de nivel nunca depende de si `lockWriter` está libre ni
+            //    de lo que esté haciendo el camino de video.
             vozController?.procesarSampleBuffer(sampleBuffer)
 
             // 2) Escribir la pista de audio, solo si el writer ya arrancó su
-            //    sesión (con un buffer de video) y está en `.writing`. No se
-            //    hace append de audio antes de `startSession` para no romper
-            //    el writer.
-            guard grabando,
-                sesionWriterIniciada,
-                let writer = assetWriter,
+            //    sesión (con un buffer de video) y está en `.writing`. Snapshot
+            //    del estado compartido bajo lock; el `append` va fuera del lock.
+            let (debeEscribir, writer, audioInput): (Bool, AVAssetWriter?, AVAssetWriterInput?) = conLock {
+                (grabando && sesionWriterIniciada, assetWriter, audioWriterInput)
+            }
+            guard debeEscribir,
+                let writer,
+                let audioInput,
                 writer.status == .writing,
-                let audioInput = audioWriterInput,
                 audioInput.isReadyForMoreMediaData
             else { return }
 
             audioInput.append(sampleBuffer)
 
         } else if output === videoDataOutput {
-            guard grabando, let writer = assetWriter else { return }
+            // Snapshot bajo lock. Si es el primer buffer de video estando
+            // grabando, arrancar la sesión del writer DENTRO del lock (mutación
+            // única y barata de `sesionWriterIniciada`); el `append` pesado se
+            // hace después, fuera del lock.
+            let (writer, videoInput): (AVAssetWriter?, AVAssetWriterInput?) = conLock {
+                guard grabando, let writer = assetWriter else { return (nil, nil) }
 
-            // Arrancar el writer con el PRIMER buffer de video (una sola vez).
-            if !sesionWriterIniciada {
-                guard writer.status == .unknown else { return }
-                if writer.startWriting() {
-                    writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
-                    sesionWriterIniciada = true
-                } else {
-                    return
+                if !sesionWriterIniciada {
+                    guard writer.status == .unknown else { return (nil, nil) }
+                    if writer.startWriting() {
+                        writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+                        sesionWriterIniciada = true
+                    } else {
+                        return (nil, nil)
+                    }
                 }
+
+                return (writer, videoWriterInput)
             }
 
-            guard writer.status == .writing,
-                let videoInput = videoWriterInput,
+            guard let writer,
+                let videoInput,
+                writer.status == .writing,
                 videoInput.isReadyForMoreMediaData
             else { return }
 

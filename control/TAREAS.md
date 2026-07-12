@@ -1705,7 +1705,7 @@ del ADR nativo en ARQUITECTURA.md):*
   concluyente. El medidor de nivel es la herramienta para calibrar: si se mueve al hablar, el audio
   llega (arreglo funcionó) y solo queda ajustar umbrales con el valor real que reporte el usuario.
 
-### ⬜ T29b. El micrófono deja de detectar voz justo al empezar a grabar (contención de cola video/audio)
+### 🔨 T29b. El micrófono deja de detectar voz justo al empezar a grabar (contención de cola video/audio)
 
 - **Diagnóstico (hecho por el orquestador tras el reporte del usuario)**: el usuario confirmó que el
   medidor de nivel SÍ funciona con la cámara activa sin grabar (T29 arregló la raíz: el audio llega).
@@ -1733,14 +1733,27 @@ del ADR nativo en ARQUITECTURA.md):*
     (solo su sincronización entre colas).
 - **Archivos**: `ios/TelepromtCam/Camara/CamaraController.swift`.
 - **Definición de Hecho**:
-  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
-  - [ ] Revisión de código: video y audio usan colas seriales SEPARADAS; el estado compartido del
+  - [x] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [x] Revisión de código: video y audio usan colas seriales SEPARADAS; el estado compartido del
     `AVAssetWriter` está protegido contra acceso concurrente (lock/actor/cola de sincronización,
     explícito); el camino de audio hacia `VozController` no depende de ni espera al camino de video.
   - [ ] Prueba funcional (que el medidor de nivel siga moviéndose mientras se graba, que el texto siga
-    avanzando con la voz durante la grabación): **la hace el usuario** — es el criterio que confirma
-    si esta hipótesis (contención de cola) era la causa real.
-- **Evidencia del verificador**: *(pendiente)*
+    avanzando con la voz durante la grabación): **PENDIENTE — la hace el usuario** — es el criterio
+    que confirma si esta hipótesis (contención de cola) era la causa real.
+- **Evidencia del verificador**: Re-verificado con `xcodebuild` independiente → `** BUILD SUCCEEDED **`.
+  Confirmé por lectura directa de `captureOutput`: la rama de audio llama
+  `vozController?.procesarSampleBuffer(sampleBuffer)` como la PRIMERA línea, antes de tocar
+  `lockWriter` — el medidor de nivel no depende del lock ni de lo que esté haciendo el video. Las
+  secciones críticas (`conLock { ... }`) son snapshots mínimos (leer/mutar referencias y flags); el
+  `append` pesado de audio y de video ocurre siempre fuera del lock. `colaVideo`/`colaAudio`/
+  `colaControl` son tres colas seriales distintas — confirmado que ya no hay una única cola
+  compartida entre los dos callbacks de sample buffer. Elección de `NSLock` (Opción A) sobre `actor`
+  bien justificada: evita envolver los delegates síncronos en `Task{await}`, que habría introducido
+  más complejidad y latencia. **Con la misma honestidad que exige APRENDIZAJES.md**: esto es una
+  HIPÓTESIS bien fundamentada (la arquitectura de cola compartida era un problema real y ahora está
+  corregido), NO una confirmación de que el síntoma desaparece — si el usuario prueba y el medidor
+  sigue congelándose al grabar, la causa sería otra (posiblemente presión de CPU global del encoder
+  por software en el simulador, o algo dentro del propio VAD) y habría que seguir investigando.
 
 ### ⬜ T30. Selección de lente y calidad robustas (enumerar dispositivos reales, mensajes claros, confirmación visible del cambio)
 
