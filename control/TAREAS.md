@@ -1705,7 +1705,44 @@ del ADR nativo en ARQUITECTURA.md):*
   concluyente. El medidor de nivel es la herramienta para calibrar: si se mueve al hablar, el audio
   llega (arreglo funcionó) y solo queda ajustar umbrales con el valor real que reporte el usuario.
 
-### ⬜ T30. Selección de lente y calidad robustas (enumerar dispositivos reales, mensajes claros)
+### ⬜ T29b. El micrófono deja de detectar voz justo al empezar a grabar (contención de cola video/audio)
+
+- **Diagnóstico (hecho por el orquestador tras el reporte del usuario)**: el usuario confirmó que el
+  medidor de nivel SÍ funciona con la cámara activa sin grabar (T29 arregló la raíz: el audio llega).
+  Pero al tocar "Grabar", el medidor deja de moverse. Causa más probable: `videoDataOutput` y
+  `audioDataOutput` comparten la MISMA cola serial `colaSampleBuffers` para sus delegates. Al grabar,
+  el `AVAssetWriterInput` de video empieza a recibir buffers 1080x1920 y a codificarlos a H264 — un
+  trabajo pesado en CPU (más aún en el encoder por software del simulador) — que se ejecuta en esa
+  cola serial compartida. Si el procesamiento/append de video tarda, los callbacks de audio quedan
+  en fila DETRÁS del trabajo de video en la misma cola serial, y el nivel deja de actualizarse (se
+  "congela") mientras dura la contención — perceptible como "el micrófono deja de funcionar".
+- **Alcance**:
+  - INCLUYE: separar las colas de los dos delegates — `videoDataOutput.setSampleBufferDelegate(self,
+    queue: colaVideo)` con una cola serial dedicada SOLO para video, y
+    `audioDataOutput.setSampleBufferDelegate(self, queue: colaAudio)` con otra cola serial dedicada
+    SOLO para audio (ambas pueden seguir siendo `.userInitiated` o QoS similar). El estado compartido
+    del `AVAssetWriter` (que ambas rutas tocan: `assetWriter`, `videoWriterInput`, `audioWriterInput`,
+    `sesionWriterIniciada`, `grabando`) pasa a protegerse con un lock explícito (`NSLock` o un
+    `DispatchQueue` de sincronización adicional para las mutaciones compartidas, o migrar ese estado a
+    un `actor` de Swift si es más limpio) — porque ahora SÍ puede haber acceso concurrente real desde
+    dos colas distintas a la vez, cosa que antes (una sola cola) evitaba por diseño. Prioriza que el
+    envío del audio a `vozController?.procesarSampleBuffer(_:)` ocurra ANTES de tocar cualquier estado
+    compartido del writer, y que sea lo más liviano posible (sin esperar locks largos) para que el
+    medidor de nivel nunca se vea afectado por lo que pase con el video.
+  - NO INCLUYE: cambiar la lógica de VAD, ni el algoritmo de escritura del `AVAssetWriter` en sí
+    (solo su sincronización entre colas).
+- **Archivos**: `ios/TelepromtCam/Camara/CamaraController.swift`.
+- **Definición de Hecho**:
+  - [ ] `xcodebuild ... build` → `** BUILD SUCCEEDED **`, 0 errores.
+  - [ ] Revisión de código: video y audio usan colas seriales SEPARADAS; el estado compartido del
+    `AVAssetWriter` está protegido contra acceso concurrente (lock/actor/cola de sincronización,
+    explícito); el camino de audio hacia `VozController` no depende de ni espera al camino de video.
+  - [ ] Prueba funcional (que el medidor de nivel siga moviéndose mientras se graba, que el texto siga
+    avanzando con la voz durante la grabación): **la hace el usuario** — es el criterio que confirma
+    si esta hipótesis (contención de cola) era la causa real.
+- **Evidencia del verificador**: *(pendiente)*
+
+### ⬜ T30. Selección de lente y calidad robustas (enumerar dispositivos reales, mensajes claros, confirmación visible del cambio)
 
 - **Alcance**:
   - INCLUYE:
@@ -1722,9 +1759,19 @@ del ADR nativo en ARQUITECTURA.md):*
        activo soporta (verificar `canSetSessionPreset` para cada opción al construir el Picker, o
        marcar las no soportadas). Documentar que en el simulador los presets disponibles son
        limitados y que el efecto de calidad solo se aprecia de verdad en un iPhone físico.
+    3. **Confirmación visible de que el cambio se aplicó (feedback nuevo, pedido tras el reporte del
+       usuario: "no sabemos si los ajustes están afectando en algo, porque no lo confirma")**: hoy
+       `aplicarCalidadCamara`/`aplicarFPS`/`cambiarLente` solo escriben un mensaje en `errorGrabacion`
+       cuando algo FALLA — cuando tienen éxito no hay ninguna señal positiva visible, así que el
+       usuario no puede distinguir "se aplicó pero no se nota" de "no se aplicó". Agrega una señal de
+       éxito breve y visible (ej. un `Text` temporal tipo "Calidad aplicada: 1080p" que aparece 1-2
+       segundos y desaparece, o un checkmark momentáneo junto al Picker correspondiente) cada vez que
+       `aplicarCalidadCamara`/`aplicarFPS`/`cambiarLente` termina con éxito. Así el usuario sabe con
+       certeza si el cambio se procesó, incluso si el efecto visual en el preview no es perceptible
+       (típico en el simulador).
   - NO INCLUYE: cambiar la lógica interna de `cambiarLente`/`aplicarCalidadCamara` (ya son correctas
-    y defensivas — el problema es de enumeración/UX, no del cambio en sí), ni el pipeline de captura
-    (T29).
+    y defensivas — el problema es de enumeración/UX y falta de feedback, no del cambio en sí), ni el
+    pipeline de captura (T29/T29b).
 - **Archivos**: `ios/TelepromtCam/Ajustes/PantallaAjustes.swift`, posiblemente
   `ios/TelepromtCam/Camara/CamaraController.swift` (exponer las cámaras disponibles) y/o
   `ios/TelepromtCam/Ajustes/AjustesStore.swift`.
